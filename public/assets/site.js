@@ -19,8 +19,9 @@
   function syncThemeBtn(){
     document.querySelectorAll('.themeBtn').forEach(function(b){
       var light = curTheme() === 'light';
-      b.innerHTML = (light ? MOON : SUN) + '<span>' + (light ? '深色模式' : '浅色模式') + '</span>';
+      b.innerHTML = light ? MOON : SUN;
       b.title = light ? '切换到深色模式' : '切换到浅色模式';
+      b.setAttribute('aria-label', b.title);
     });
   }
   function toggleTheme(){
@@ -42,21 +43,23 @@
     bg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4l5 5-9.5 9.5H5.5v-5z"/><path d="M12.5 6.5l5 5"/><path d="M4 21h16" stroke-dasharray="2 3"/></svg>',
     gif:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="13" height="13" rx="2"/><path d="M8 2h11a2 2 0 0 1 2 2v11"/><path d="M8 9.5l3.5 2-3.5 2z" fill="currentColor"/></svg>',
     split:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+    logo:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>',
     lock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'
   };
   var LINKS = [
-    {key:'compress', text:'压缩 · 转换', sub:'缩小体积，转 WebP / JPG'},
-    {key:'bg',       text:'去背景',     sub:'纯色背景变透明'},
-    {key:'gif',      text:'动图合成',   sub:'多张图片做成 GIF'},
-    {key:'split',    text:'GIF 拆解',   sub:'拆成一张张图片'}
+    {key:'compress', text:'图片压缩转换', sub:'缩小体积，转 WebP / JPG'},
+    {key:'bg',       text:'消除背景',     sub:'纯色背景变透明'},
+    {key:'gif',      text:'GIF合成',      sub:'多张图片做成 GIF'},
+    {key:'split',    text:'GIF拆解',      sub:'拆成一张张图片'}
   ];
   function renderBar(el, active){
-    var h = '<div class="brand"><b>图片工具箱</b></div><nav class="tabs-app">';
+    var h = '<div class="brand"><span class="logo">'+ICON.logo+'</span><span class="name">图片工具箱</span></div><nav class="tabs-app" aria-label="工具">';
     LINKS.forEach(function(l){
-      h += '<a data-k="'+l.key+'" class="'+(l.key===active?'on':'')+'" href="'+url(l.key)+'"'+(l.key===active?' aria-current="page"':'')+'>'
-        + '<span class="ic">'+ICON[l.key]+'</span><span class="t"><b>'+l.text+'</b><small>'+l.sub+'</small></span></a>';
+      // 副标题放进鼠标悬停提示，标签保持一行
+      h += '<a data-k="'+l.key+'" class="'+(l.key===active?'on':'')+'" href="'+url(l.key)+'" title="'+l.sub+'"'+(l.key===active?' aria-current="page"':'')+'>'
+        + ICON[l.key] + l.text + '</a>';
     });
-    h += '</nav><div class="side"><div class="local">'+ICON.lock+'图片只在你的电脑上处理，不上传</div><button type="button" class="themeBtn"></button></div>';
+    h += '</nav><div class="side"><div class="local" title="图片只在你的电脑上处理，不会上传到任何服务器">'+ICON.lock+'本地处理，不上传</div><button type="button" class="themeBtn"></button></div>';
     el.innerHTML = h;
     el.querySelector('.themeBtn').onclick = toggleTheme;
     syncThemeBtn();
@@ -70,10 +73,38 @@
   }
   function initNav(){
     document.querySelectorAll('.appbar').forEach(function(el){
+      if(el.hasAttribute('data-ready')) return;   // 页面里已经提前画好了
+      el.setAttribute('data-ready', '');
       var a = el.getAttribute('data-active')||'';
       renderBar(el, a);
+      el.addEventListener('click', function(e){
+        var link = e.target.closest('.tabs-app a[data-k]');
+        if(!link || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        var key = link.getAttribute('data-k');
+        // 当前工具不刷新；同页工具交给页面直接切换，保留已导入的图片。
+        if(link.getAttribute('aria-current') === 'page') { e.preventDefault(); return; }
+        var change = new CustomEvent('imgtools:navigate', {detail:{key:key}, cancelable:true});
+        if(!window.dispatchEvent(change)) e.preventDefault();
+      });
+      el.addEventListener('pointerover', warmTool);
+      el.addEventListener('focusin', warmTool);
       try{ if(a) localStorage.setItem('imgtools.last', a); }catch(e){}
     });
+  }
+  var warmed = {};
+  function warmTool(e){
+    var link = e.target.closest('.tabs-app a[data-k]');
+    if(LOCAL || !link || link.getAttribute('aria-current') === 'page') return;
+    if(navigator.connection && (navigator.connection.saveData || /(^|-)2g$/.test(navigator.connection.effectiveType))) return;
+    var target = new URL(link.href);
+    target.hash = '';
+    // 合成与拆解共用一个文档，无需预取当前页。
+    if(target.origin === location.origin && target.pathname === location.pathname) return;
+    if(warmed[target.href]) return;
+    warmed[target.href] = true;
+    var hint = document.createElement('link');
+    hint.rel = 'prefetch'; hint.href = target.href; hint.as = 'document';
+    document.head.appendChild(hint);
   }
   // 打开网站时进入上次用的工具（第一次默认「压缩 · 转换」）
   function lastTool(){ try{ var v = localStorage.getItem('imgtools.last'); if(v && /^(compress|bg|gif|split)$/.test(v)) return v; }catch(e){} return 'compress'; }
@@ -173,6 +204,6 @@
     return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'-'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds());
   }
 
-  window.Site = {url:url, lastTool:lastTool, setActive:setActive, send:send, take:take, toFiles:toFiles, toast:toast, zip:zip, download:download, stamp:stamp};
+  window.Site = {mountNav:initNav, url:url, lastTool:lastTool, setActive:setActive, send:send, take:take, toFiles:toFiles, toast:toast, zip:zip, download:download, stamp:stamp};
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initNav); else initNav();
 })();

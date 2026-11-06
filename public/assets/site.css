@@ -22,53 +22,52 @@
   color-scheme:light;
 }
 
-/* ---------------- 顶部：品牌 + 工具标签 ---------------- */
+/* 滚动条的位置始终预留：有没有滚动条，页面宽度都一样，切换时不会左右晃 */
+html{scrollbar-gutter:stable}
+
+/* ---------------- 顶部：品牌 + 工具标签（单行，54px） ---------------- */
 .appbar{
-  display:flex;align-items:flex-end;gap:22px;flex:none;
-  border-bottom:1px solid var(--edge);
-  margin:0 0 16px;padding:10px 0 0;
+  display:flex;align-items:center;gap:22px;flex:none;height:54px;
+  margin:0 0 16px;padding:0;
+  background:var(--panel);
+  /* 底色和底线铺满整个窗口宽度，内容仍和下面对齐 */
+  box-shadow:0 0 0 100vmax var(--panel),0 1px 0 100vmax var(--edge);
+  clip-path:inset(0 -100vmax -1px);
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
   color:var(--ink);
 }
-.appbar .brand{display:flex;align-items:center;padding-bottom:20px;flex:none;white-space:nowrap}
-.appbar .brand b{font-size:16px;font-weight:700;letter-spacing:.4px}
+.appbar .brand{display:flex;align-items:center;gap:9px;flex:none;white-space:nowrap;font-size:14px;font-weight:700;letter-spacing:.3px}
+.appbar .logo{width:26px;height:26px;border-radius:7px;background:var(--hi);color:var(--on-hi);display:flex;align-items:center;justify-content:center}
+.appbar .logo svg{width:15px;height:15px}
 
-.tabs-app{display:flex;gap:4px;min-width:0;overflow-x:auto;scrollbar-width:none;margin-bottom:-1px}
+.tabs-app{display:flex;gap:2px;height:100%;min-width:0;overflow-x:auto;scrollbar-width:none}
 .tabs-app::-webkit-scrollbar{display:none}
 .tabs-app a{
-  position:relative;display:flex;align-items:center;gap:11px;flex:none;
-  padding:11px 20px 12px 14px;
-  border:1px solid transparent;border-bottom:0;border-radius:10px 10px 0 0;
-  color:var(--dim);text-decoration:none;
-  transition:background-color .15s,color .15s;
+  display:flex;align-items:center;gap:7px;flex:none;height:100%;padding:0 14px;
+  border-bottom:2px solid transparent;
+  color:var(--dim);text-decoration:none;font-size:13.5px;font-weight:600;white-space:nowrap;
+  transition:color .15s,border-color .15s;
 }
-.tabs-app a:hover{background:var(--panel);color:var(--ink)}
-.tabs-app a .ic{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:var(--raised);color:var(--ink);flex:none;transition:background-color .15s,color .15s}
-.tabs-app a .ic svg{width:19px;height:19px}
-.tabs-app a .t{display:flex;flex-direction:column;line-height:1.25}
-.tabs-app a .t b{font-size:15px;font-weight:650;color:inherit}
-.tabs-app a .t small{font-size:12px;color:var(--dim);margin-top:2px}
-.tabs-app a.on{background:var(--panel);border-color:var(--edge);color:var(--ink)}
-.tabs-app a.on::before{content:"";position:absolute;left:-1px;right:-1px;top:-1px;height:3px;border-radius:10px 10px 0 0;background:var(--hi)}
-.tabs-app a.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:var(--panel)}
-.tabs-app a.on .ic{background:var(--hi);color:var(--on-hi)}
-.tabs-app a:focus-visible{outline:2px solid var(--hi);outline-offset:-2px}
+.tabs-app a svg{width:16px;height:16px;flex:none}
+.tabs-app a:hover{color:var(--ink)}
+.tabs-app a.on{color:var(--ink);border-bottom-color:var(--hi)}
+.tabs-app a.on svg{color:var(--hi)}
+:root[data-theme="light"] .tabs-app a.on svg{color:#8a5a00}
+.tabs-app a:focus-visible{outline:2px solid var(--hi);outline-offset:-4px;border-radius:6px}
 
-.appbar .side{margin-left:auto;padding-bottom:14px;display:flex;align-items:center;gap:14px}
-.appbar .local{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);white-space:nowrap}
-.appbar .local svg{width:14px;height:14px}
-@media (max-width:1100px){ .appbar .local{display:none} }
-.themeBtn{display:flex;align-items:center;gap:6px;border:1px solid var(--edge);background:var(--panel);color:var(--ink);
-  border-radius:8px;padding:6px 11px;font:500 13px/1.2 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;cursor:pointer;white-space:nowrap}
-.themeBtn:hover{border-color:var(--edge2)}
+.appbar .side{margin-left:auto;display:flex;align-items:center;gap:12px;flex:none}
+.appbar .local{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--dim);white-space:nowrap}
+.appbar .local svg{width:13px;height:13px}
+.themeBtn{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;flex:none;
+  border:1px solid var(--edge);background:transparent;color:var(--ink);border-radius:9px;padding:0;cursor:pointer}
+.themeBtn:hover{background:var(--raised)}
 .themeBtn:focus-visible{outline:2px solid var(--hi);outline-offset:2px}
-.themeBtn svg{width:15px;height:15px}
-@media (max-width:860px){
+.themeBtn svg{width:17px;height:17px}
+@media (max-width:1000px){ .appbar .local{display:none} }
+@media (max-width:720px){
   .appbar{gap:12px}
-    .tabs-app a{padding:9px 12px 10px 10px;gap:8px}
-  .tabs-app a .t small{display:none}
-  .tabs-app a .ic{width:28px;height:28px}
-  .themeBtn span{display:none}
+  .appbar .brand span.name{display:none}
+  .tabs-app a{padding:0 10px}
 }
 
 /* 页面之间传图时的提示条 */
@@ -78,7 +77,6 @@
   padding:9px 16px;border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.45);
   transition:opacity .3s;
 }
-@media (prefers-reduced-motion:reduce){ .tabs-app a,.tabs-app a .ic,.handoffToast{transition:none} }
+@media (prefers-reduced-motion:reduce){ .tabs-app a,.handoffToast{transition:none} }
 
-:root[data-theme="light"] .tabs-app a.on .ic{color:var(--on-hi)}
 :root[data-theme="light"] .handoffToast{box-shadow:0 8px 28px rgba(0,0,0,.18)}

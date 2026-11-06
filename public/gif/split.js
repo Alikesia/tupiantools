@@ -230,6 +230,11 @@ function setView(v){
   document.title = v==='split' ? 'GIF 拆解' : '动图合成工具';
 }
 document.querySelectorAll('#viewTabs button').forEach(b=>b.onclick=()=>setView(b.dataset.v));
+window.addEventListener('imgtools:navigate', e=>{
+  if(e.detail.key !== 'gif' && e.detail.key !== 'split') return;
+  e.preventDefault();
+  setView(e.detail.key === 'split' ? 'split' : 'make');
+});
 window.addEventListener('hashchange', ()=>setView(location.hash==='#split' ? 'split' : 'make'));
 setView(location.hash==='#split' ? 'split' : 'make');
 spRender();

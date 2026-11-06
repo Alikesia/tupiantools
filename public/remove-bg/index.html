@@ -17,7 +17,7 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
 .wrap{max-width:1440px;margin:0 auto;padding:0 20px 32px}
-@media (max-width:720px){.wrap{padding:12px 14px 24px}}
+@media (max-width:720px){.wrap{padding:0 20px 24px}}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
 .card h2{font-size:13px;font-weight:600;margin:0 0 10px;color:var(--muted)}
 .card+.card{margin-top:14px}
@@ -86,7 +86,7 @@ select{background:var(--bg);color:var(--text);border:1px solid var(--line);borde
 </head>
 <body>
 <div class="wrap">
-<header class="appbar" data-active="bg"></header>
+<header class="appbar" data-active="bg"></header><script>Site.mountNav()</script>
 
 <div class="card">
   <div class="toolbar">

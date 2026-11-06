@@ -401,6 +401,7 @@ input:focus,select:focus{border-color:var(--green)}
 
 /* ---- 和全站统一 ---- */
 body{padding:0 20px 14px;font-size:12.5px}
+@media(max-width:760px){ body{padding-bottom:130px} }
 .wrap{max-width:1440px}
 .wrap>.appbar{margin-bottom:10px}
 button{border-radius:6px}
@@ -413,7 +414,7 @@ input,select{border-radius:6px}
 </head>
 <body>
 <div class="wrap">
-  <header class="appbar" data-active="compress"></header>
+  <header class="appbar" data-active="compress"></header><script>Site.mountNav()</script>
 
   <main id="app" class="app">
     <aside class="console">
