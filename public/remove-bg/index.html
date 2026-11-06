@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>去背景</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+<style>
+:root{
+  --bg:#1c1d20; --panel:#242529; --line:#36383e; --text:#ededef; --muted:#9a9ba3;
+  --accent:#ffc93c; --accent-soft:#3a321c; --warn:#ffd36b; --danger:#f07272; --chk1:#2b2c30; --chk2:#232427;
+}
+:root[data-theme="light"]{
+  --bg:#f2f2f3; --panel:#ffffff; --line:#dcdce0; --text:#1d1e21; --muted:#6b6d75; --accent:#ffc93c; --accent-soft:#fff3cf; --ok:#1f9d62; --warn:#9a6a00; --danger:#d64545; --chk1:#e6e6e9; --chk2:#f6f6f7;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+.wrap{max-width:1440px;margin:0 auto;padding:0 20px 32px}
+@media (max-width:720px){.wrap{padding:12px 14px 24px}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.card h2{font-size:13px;font-weight:600;margin:0 0 10px;color:var(--muted)}
+.card+.card{margin-top:14px}
+.hidden{display:none!important}
+
+/* 工具栏 */
+.toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.tb{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:8px;padding:6px 11px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.tb:hover:not(:disabled){border-color:var(--muted)}
+.tb:disabled{opacity:.4;cursor:not-allowed}
+.tb.primary{background:var(--accent);border-color:var(--accent);color:#231a00;font-weight:600}
+.tb.danger{color:var(--danger)}
+.sep{width:1px;height:20px;background:var(--line);margin:0 4px}
+
+/* 图片列表 */
+.strip{display:flex;gap:8px;overflow-x:auto;padding:10px 2px 4px;min-height:40px}
+.strip .emptyHint{flex:1;min-height:110px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);font-size:13px;cursor:pointer;gap:2px;border:1px dashed var(--line);border-radius:10px}
+.strip .emptyHint b{color:var(--accent);font-size:14px}
+.strip.over .emptyHint,.strip.over{background:var(--accent-soft)}
+.it{flex:none;width:118px;border:1px solid var(--line);border-radius:8px;overflow:hidden;cursor:pointer;position:relative;background:var(--panel)}
+.it.cur{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.it .th{height:74px;display:flex;align-items:center;justify-content:center;background:repeating-conic-gradient(var(--chk1) 0 25%,var(--chk2) 0 50%) 0 0/10px 10px}
+.it .th canvas{max-width:100%;max-height:100%;display:block}
+.it .nm{font-size:11px;padding:4px 6px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.it .st{font-size:10.5px;padding:0 6px 5px;color:var(--muted)}
+.it .x{position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:5px;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:12px;line-height:18px;padding:0;cursor:pointer;display:none}
+.it:hover .x{display:block}
+
+/* 两栏 */
+.cols{display:grid;grid-template-columns:300px 1fr;gap:14px;margin-top:14px;align-items:start}
+@media (max-width:820px){.cols{grid-template-columns:1fr}}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:9px 0}
+.row>.lbl{width:60px;color:var(--muted);font-size:13px;flex:none}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--text);padding:5px 9px;font:inherit;font-size:13px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--accent);color:#231a00;font-weight:600}
+input[type=range]{flex:1;min-width:90px;accent-color:var(--accent)}
+input[type=color]{width:34px;height:28px;border:1px solid var(--line);border-radius:7px;background:var(--bg);padding:2px}
+select{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:5px 8px;font:inherit;font-size:13px}
+.chk{display:flex;align-items:flex-start;gap:7px;font-size:13px;margin:8px 0;cursor:pointer}
+.chk input{accent-color:var(--accent);margin-top:3px}
+.chk small{display:block;color:var(--muted);font-size:12px}
+.hint{color:var(--muted);font-size:12px;margin:2px 0 0}
+.swatch{display:inline-block;width:16px;height:16px;border-radius:4px;border:1px solid var(--line);vertical-align:-3px;margin-right:4px}
+.val{width:28px;text-align:right;font-variant-numeric:tabular-nums}
+
+/* 预览 */
+.pvTools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.pvTools .grow{flex:1}
+.bgs{display:inline-flex;gap:4px}
+.bgs button{width:24px;height:24px;border-radius:6px;border:1px solid var(--line);cursor:pointer;padding:0}
+.bgs button.on{outline:2px solid var(--accent);outline-offset:1px}
+.bgs .b-chk{background:repeating-conic-gradient(#cfcfcf 0 25%,#fff 0 50%) 0 0/8px 8px}
+.stage{position:relative;border-radius:10px;overflow:auto;min-height:320px;max-height:calc(100vh - 230px);display:flex;align-items:center;justify-content:center;padding:14px}
+.stage.b-chk{background:repeating-conic-gradient(#cfcfcf 0 25%,#fff 0 50%) 0 0/16px 16px}
+.stage canvas{display:block;max-width:100%;max-height:calc(100vh - 260px);image-rendering:auto}
+.stage.zoom canvas{max-width:none;max-height:none}
+.stage.zoom{align-items:flex-start;justify-content:flex-start}
+.stage .empty{color:#666;font-size:13px}
+.stage.cursor-wand canvas{cursor:crosshair}
+.stage.cursor-pick canvas{cursor:copy}
+.pvBar{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:8px}
+.status{color:var(--muted);font-size:13px;margin-top:8px;min-height:20px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="appbar" data-active="bg"></header>
+
+<div class="card">
+  <div class="toolbar">
+    <button class="tb" id="tbAdd">＋ 添加图片</button>
+    <span class="sep"></span>
+    <button class="tb primary" id="tbZip" disabled>全部下载（ZIP）</button>
+    <button class="tb" id="tbOne" disabled>下载当前这张</button>
+    <span class="sep"></span>
+    <button class="tb" id="tbToCompress" disabled>送去压缩</button>
+    <button class="tb" id="tbToGif" disabled>送去动图合成</button>
+    <button class="tb danger" id="tbClear" style="margin-left:auto" disabled>清空</button>
+  </div>
+  <div class="strip" id="strip"></div>
+  <input type="file" id="picker" accept="image/*" multiple hidden>
+</div>
+
+<div class="cols">
+  <section>
+    <div class="card">
+      <h2 style="display:flex;justify-content:space-between;align-items:center">背景 <button class="tb" id="resetP" style="padding:3px 9px;font-size:12px" title="所有设置回到建议值" disabled>恢复建议值</button></h2>
+      <div class="row"><span class="lbl">背景色</span>
+        <div class="seg" id="modeSeg"><button data-v="auto" class="on">自动识别</button><button data-v="color">指定颜色</button></div>
+        <input type="color" id="bgColor" value="#ffffff" class="hidden">
+      </div>
+      <p class="hint" id="detected">—</p>
+      <div class="row"><span class="lbl">容差</span>
+        <input type="range" id="tol" min="1" max="100" value="25"><span class="val" id="tolV">25</span>
+      </div>
+      <p class="hint">背景没去干净就调大；主体被吃掉就调小。</p>
+      <label class="chk"><input type="checkbox" id="holes" checked><span>去掉内部空洞<small>比如字母「O」中间露出的背景。高光、反光不会被误删。</small></span></label>
+      <label class="chk"><input type="checkbox" id="global"><span>同色区域全部去掉<small>不管连不连着外面，和背景同色的地方都变透明。白底时会连白色高光一起去掉，慎用。</small></span></label>
+    </div>
+
+    <div class="card">
+      <h2>边缘</h2>
+      <label class="chk"><input type="checkbox" id="smooth" checked><span>边缘平滑<small>半透明过渡，并去掉边缘残留的背景色，换到深色背景上不会有白边。</small></span></label>
+      <div class="row"><span class="lbl">收缩</span>
+        <div class="seg" id="shrinkSeg"><button data-v="0" class="on">不收缩</button><button data-v="1">1 px</button><button data-v="2">2 px</button><button data-v="3">3 px</button></div>
+      </div>
+      <p class="hint">边缘还有一圈杂色时，收缩 1～2 px。</p>
+    </div>
+
+    <div class="card">
+      <h2>导出</h2>
+      <div class="row"><span class="lbl">格式</span>
+        <div class="seg" id="fmtSeg"><button data-v="png" class="on">PNG</button><button data-v="webp">WebP</button></div>
+      </div>
+      <label class="chk"><input type="checkbox" id="trim"><span>裁掉四周多余的透明边<small>只留主体，适合做 logo、贴纸、素材。</small></span></label>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
+      <div class="pvTools">
+        <div class="seg" id="toolSeg" title="在预览图上点击">
+          <button data-v="remove" class="on">魔棒：点哪去哪</button><button data-v="keep">魔棒：点哪恢复哪</button><button data-v="pick">吸管：选背景色</button>
+        </div>
+        <button class="tb" id="undo" disabled>撤销</button>
+        <button class="tb" id="resetOps" disabled>清除手动修改</button>
+        <span class="grow"></span>
+        <button class="tb" id="holdOrig" disabled>按住看原图</button>
+        <button class="tb" id="zoomBtn" disabled>100%</button>
+        <div class="bgs" id="bgs" title="预览背景">
+          <button data-v="b-chk" class="b-chk on"></button><button data-v="#ffffff" style="background:#fff"></button><button data-v="#111111" style="background:#111"></button><button data-v="#e5484d" style="background:#e5484d"></button><button data-v="#2f6df6" style="background:#2f6df6"></button>
+        </div>
+      </div>
+      <div class="stage b-chk" id="stage"><div class="empty" id="stageEmpty">添加图片后在这里预览</div><canvas id="pv" class="hidden"></canvas></div>
+      <div class="pvBar"><span id="pvInfo">—</span><span id="pvTip">没去干净的地方用「点哪去哪」点一下；误删的地方用「点哪恢复哪」点回来。</span></div>
+      <div class="status" id="status"></div>
+    </div>
+  </section>
+</div>
+</div>
+
+<script>
+/* ============================== 设置 ============================== */
+const $ = id => document.getElementById(id);
+// 建议值：每次打开都从这里开始，不记住上次的调整
+const DEFAULTS = {mode:'auto', bgColor:'#ffffff', tol:25, holes:true, global:false, smooth:true, shrink:0, fmt:'png', trim:false};
+const P = {...DEFAULTS};
+const save = ()=>{};
+try{ localStorage.removeItem('rmbg.v1'); }catch(e){}
+
+let items = [], cur = null, uid = 0, tool = 'remove', zoom = false, backdrop = 'b-chk', showOrig = false;
+
+/* ============================== 去背景算法 ============================== */
+const hexRgb = h => [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)];
+const rgbHex = c => '#'+c.map(v=>Math.round(v).toString(16).padStart(2,'0')).join('');
+
+function sourceData(it){
+  const c = document.createElement('canvas'); c.width = it.W; c.height = it.H;
+  const x = c.getContext('2d', {willReadFrequently:true}); x.drawImage(it.img, 0, 0);
+  return x.getImageData(0, 0, it.W, it.H);
+}
+// 四条边上最常见的颜色（取中位数），作为背景色
+function borderColor(d, W, H){
+  const r=[], g=[], b=[];
+  const add = i=>{ const o=i*4; if(d[o+3] < 20) return; r.push(d[o]); g.push(d[o+1]); b.push(d[o+2]); };
+  for(let x=0;x<W;x++){ add(x); add((H-1)*W+x); }
+  for(let y=1;y<H-1;y++){ add(y*W); add(y*W+W-1); }
+  if(!r.length) return null;            // 四边都是透明的
+  const med = a=>{ a.sort((p,q)=>p-q); return a[a.length>>1]; };
+  return [med(r), med(g), med(b)];
+}
+
+function removeBg(it){
+  const W = it.W, H = it.H, N = W*H;
+  const src = sourceData(it), d = src.data;
+  const T = P.tol, stepT = 3 + T*0.4, distT = 20 + T*2;
+  const dom = P.mode === 'color' ? hexRgb(P.bgColor) : (borderColor(d, W, H) || [255,255,255]);
+  it.detected = dom;
+  const dist = (o, c)=>{ const dr=d[o]-c[0], dg=d[o+1]-c[1], db=d[o+2]-c[2]; return Math.sqrt(dr*dr+dg*dg+db*db); };
+  const bg = new Uint8Array(N), q = new Int32Array(N);
+
+  // 1. 从四条边往里找背景。每个背景像素记着一个「参考色」，参考色每走一个像素最多变 1.5，
+  //    所以很缓慢的渐变能一路走过去；而主体边缘几个像素内颜色就变很多，会被挡住（即使边缘是模糊的）。
+  const rr = new Float32Array(N), rg = new Float32Array(N), rb = new Float32Array(N);
+  const K = 1.5, seedOf = new Int32Array(N);
+  const similar = (a, b)=>{               // 像素 a 已是背景，b 能不能算背景
+    const ob = b*4;
+    if(d[ob+3] < 20){ rr[b]=rr[a]; rg[b]=rg[a]; rb[b]=rb[a]; seedOf[b]=seedOf[a]; return true; }
+    const dr = d[ob]-rr[a], dg = d[ob+1]-rg[a], db = d[ob+2]-rb[a];
+    if(dr*dr+dg*dg+db*db >= distT*distT) return false;
+    const nr = rr[a] + Math.max(-K, Math.min(K, dr)), ng = rg[a] + Math.max(-K, Math.min(K, dg)), nb = rb[a] + Math.max(-K, Math.min(K, db));
+    // 参考色离出发点的颜色最多偏移一个容差，防止顺着主体内部的渐变一直走进去
+    const so = seedOf[a]*4, er = nr-d[so], eg = ng-d[so+1], eb = nb-d[so+2];
+    if(d[so+3] >= 20 && er*er+eg*eg+eb*eb > distT*distT) return false;
+    rr[b] = nr; rg[b] = ng; rb[b] = nb; seedOf[b] = seedOf[a];
+    return true;
+  };
+  let qh=0, qt=0;
+  const seed = i=>{ if(bg[i]) return; const o=i*4;
+    if(d[o+3] < 20){ bg[i]=1; rr[i]=dom[0]; rg[i]=dom[1]; rb[i]=dom[2]; seedOf[i]=i; q[qt++]=i; }
+    else if(dist(o, dom) < distT){ bg[i]=1; rr[i]=d[o]; rg[i]=d[o+1]; rb[i]=d[o+2]; seedOf[i]=i; q[qt++]=i; } };
+  for(let x=0;x<W;x++){ seed(x); seed((H-1)*W+x); }
+  for(let y=0;y<H;y++){ seed(y*W); seed(y*W+W-1); }
+  const flood = (mask, cond)=>{
+    while(qh < qt){
+      const i = q[qh++], x = i % W;
+      if(x>0   && !mask[i-1] && cond(i,i-1)){ mask[i-1]=1; q[qt++]=i-1; }
+      if(x<W-1 && !mask[i+1] && cond(i,i+1)){ mask[i+1]=1; q[qt++]=i+1; }
+      if(i>=W  && !mask[i-W] && cond(i,i-W)){ mask[i-W]=1; q[qt++]=i-W; }
+      if(i<N-W && !mask[i+W] && cond(i,i+W)){ mask[i+W]=1; q[qt++]=i+W; }
+    }
+  };
+  flood(bg, similar);
+
+  // 2. 内部空洞 / 同色区域
+  if(P.global){
+    for(let i=0;i<N;i++) if(!bg[i] && (d[i*4+3] < 20 || dist(i*4, dom) < distT)) bg[i]=1;
+  }else if(P.holes) fillHoles(d, W, H, bg, dom, distT, dist, q);
+
+  // 3. 手动修改（魔棒）
+  for(const op of it.ops) wand(d, W, H, bg, op, stepT, distT, dist, q);
+
+  // 4. 收缩边缘
+  for(let s=0; s<P.shrink; s++){
+    const grow = [];
+    for(let i=0;i<N;i++){ if(bg[i]) continue; const x=i%W;
+      if((x>0&&bg[i-1])||(x<W-1&&bg[i+1])||(i>=W&&bg[i-W])||(i<N-W&&bg[i+W])) grow.push(i); }
+    for(const i of grow) bg[i]=1;
+  }
+
+  // 5. 输出：背景透明；靠近背景的边缘按颜色差做半透明，并扣掉混进去的背景色
+  const out = new ImageData(W, H), o = out.data;
+  const lo = 10 + T*0.8, hi = lo + 170;
+  let kept = 0;
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const i = y*W+x, p = i*4;
+    if(bg[i]) continue;
+    kept++;
+    let a = 1, R=d[p], G=d[p+1], B=d[p+2];
+    if(P.smooth){
+      let n=0, sr=0, sg=0, sb=0;
+      for(let dy=-2; dy<=2; dy++){ const yy=y+dy; if(yy<0||yy>=H) continue;
+        for(let dx=-2; dx<=2; dx++){ const xx=x+dx; if(xx<0||xx>=W) continue; const j=yy*W+xx;
+          if(bg[j]){ const pj=j*4; if(d[pj+3] < 20){ sr+=dom[0]; sg+=dom[1]; sb+=dom[2]; } else { sr+=d[pj]; sg+=d[pj+1]; sb+=d[pj+2]; } n++; } } }
+      if(n){
+        const ref = [sr/n, sg/n, sb/n];
+        a = Math.min(1, Math.max(0, (dist(p, ref) - lo) / (hi - lo)));
+        if(a > 0.02 && a < 1){ R=(R-ref[0]*(1-a))/a; G=(G-ref[1]*(1-a))/a; B=(B-ref[2]*(1-a))/a; }
+      }
+    }
+    o[p]=R; o[p+1]=G; o[p+2]=B; o[p+3]=Math.round(a*d[p+3]);
+  }
+  it.ratio = 1 - kept/N;
+  it.out = out;
+  // 裁边
+  let bx0=0, by0=0, bx1=W-1, by1=H-1;
+  if(P.trim){
+    bx0=W; by0=H; bx1=-1; by1=-1;
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++) if(o[(y*W+x)*4+3] > 8){ if(x<bx0)bx0=x; if(x>bx1)bx1=x; if(y<by0)by0=y; if(y>by1)by1=y; }
+    if(bx1 < 0){ bx0=0; by0=0; bx1=W-1; by1=H-1; }
+  }
+  const c = document.createElement('canvas'); c.width = bx1-bx0+1; c.height = by1-by0+1;
+  c.getContext('2d').putImageData(out, -bx0, -by0);
+  it.canvas = c; it.trimOff = [bx0, by0]; it.dirty = false; it.blob = null;
+}
+
+// 被主体包住、和背景同色的区域：如果它周围的颜色和主体最外圈（描边）一样，就是透出来的背景
+function fillHoles(d, W, H, bg, dom, distT, dist, q){
+  const N = W*H;
+  // 主体最外圈的颜色：紧贴背景、往里 1～2 像素的像素
+  const sr=[], sg=[], sb=[];
+  const dirs = [1,-1,W,-W];
+  for(let i=0;i<N && sr.length<40000;i+=1){
+    if(bg[i]) continue;
+    for(const dd of dirs){
+      const a = i+dd, b = i+3*dd;
+      if(b<0||b>=N||Math.abs((b%W)-(i%W))>3) continue;
+      if(!bg[a] && bg[b]){ const p=i*4; sr.push(d[p]); sg.push(d[p+1]); sb.push(d[p+2]); break; }
+    }
+  }
+  if(!sr.length) return;
+  const med = a=>{ a.sort((p,q)=>p-q); return a[a.length>>1]; };
+  const outline = [med(sr), med(sg), med(sb)];
+  const cand = new Uint8Array(N);
+  for(let i=0;i<N;i++) if(!bg[i] && d[i*4+3]>=20 && dist(i*4, dom) < distT) cand[i]=1;
+  const seen = new Uint8Array(N), minSize = Math.max(40, Math.round(N*0.00005));
+  for(let s=0;s<N;s++){
+    if(!cand[s] || seen[s]) continue;
+    let qh=0, qt=0; q[qt++]=s; seen[s]=1;
+    while(qh<qt){ const i=q[qh++], x=i%W;
+      if(x>0&&cand[i-1]&&!seen[i-1]){seen[i-1]=1;q[qt++]=i-1;}
+      if(x<W-1&&cand[i+1]&&!seen[i+1]){seen[i+1]=1;q[qt++]=i+1;}
+      if(i>=W&&cand[i-W]&&!seen[i-W]){seen[i-W]=1;q[qt++]=i-W;}
+      if(i<N-W&&cand[i+W]&&!seen[i+W]){seen[i+W]=1;q[qt++]=i+W;} }
+    if(qt < minSize) continue;
+    // 这块区域外面一圈的平均颜色
+    let n=0, r=0, g=0, b=0;
+    const step = Math.max(1, Math.floor(qt/4000));
+    for(let k=0;k<qt;k+=step){ const i=q[k], x=i%W;
+      for(const [dx,dy] of [[4,0],[-4,0],[0,4],[0,-4]]){ const xx=x+dx, yy=(i-x)/W+dy;
+        if(xx<0||xx>=W||yy<0||yy>=H) continue; const j=yy*W+xx;
+        if(cand[j]||bg[j]) continue; const p=j*4; r+=d[p]; g+=d[p+1]; b+=d[p+2]; n++; } }
+    if(!n) continue;
+    const dr=r/n-outline[0], dg=g/n-outline[1], db=b/n-outline[2];
+    if(Math.sqrt(dr*dr+dg*dg+db*db) < 90) for(let k=0;k<qt;k++) bg[q[k]]=1;
+  }
+}
+
+// 魔棒：从点击的位置开始，把相连的相近颜色整块去掉或恢复
+function wand(d, W, H, bg, op, stepT, distT, dist, q){
+  const N = W*H, s = op.y*W+op.x; if(s<0||s>=N) return;
+  const c = [d[s*4], d[s*4+1], d[s*4+2]], ca = d[s*4+3];
+  const reg = new Uint8Array(N); let qh=0, qt=0; q[qt++]=s; reg[s]=1;
+  const ok = (a,b)=>{ const oa=a*4, ob=b*4;
+    if(ca < 20) return d[ob+3] < 20;
+    if(d[ob+3] < 20) return false;
+    return Math.abs(d[oa]-d[ob])<stepT && Math.abs(d[oa+1]-d[ob+1])<stepT && Math.abs(d[oa+2]-d[ob+2])<stepT && dist(ob,c) < distT*1.5; };
+  while(qh<qt){ const i=q[qh++], x=i%W;
+    if(x>0&&!reg[i-1]&&ok(i,i-1)){reg[i-1]=1;q[qt++]=i-1;}
+    if(x<W-1&&!reg[i+1]&&ok(i,i+1)){reg[i+1]=1;q[qt++]=i+1;}
+    if(i>=W&&!reg[i-W]&&ok(i,i-W)){reg[i-W]=1;q[qt++]=i-W;}
+    if(i<N-W&&!reg[i+W]&&ok(i,i+W)){reg[i+W]=1;q[qt++]=i+W;} }
+  const v = op.mode === 'remove' ? 1 : 0;
+  for(let k=0;k<qt;k++) bg[q[k]] = v;
+}
+
+/* ============================== 图片列表 ============================== */
+async function addFiles(files){
+  const imgs = files.filter(f=>f.type.startsWith('image/'));
+  if(files.length && !imgs.length){ setStatus('只能添加图片文件', true); return; }
+  let n = 0;
+  for(const f of imgs){
+    setStatus(`正在读取 ${++n}/${imgs.length}…`);
+    try{
+      const url = URL.createObjectURL(f), img = new Image(); img.src = url; await img.decode();
+      const it = {id:++uid, name:f.name||'粘贴的图片', img, url, W:img.naturalWidth, H:img.naturalHeight, ops:[], dirty:true};
+      it.thumb = document.createElement('canvas');
+      items.push(it);
+    }catch(e){ setStatus('读取失败：'+f.name, true); }
+  }
+  setStatus('');
+  if(!cur && items.length) cur = items[0];
+  else if(imgs.length && items.length) cur = items[items.length - imgs.length] || cur;
+  renderStrip(); refresh();
+}
+function renderStrip(){
+  const s = $('strip'); s.innerHTML = '';
+  if(!items.length){
+    const h = document.createElement('div'); h.className = 'emptyHint';
+    h.innerHTML = '<b>＋ 把图片拖到这里，或点击添加</b><span>可以一次放多张，也可以 ⌘V / Ctrl+V 粘贴</span>';
+    h.onclick = ()=>$('picker').click(); s.appendChild(h);
+  }
+  items.forEach(it=>{
+    const t = document.createElement('div'); t.className = 'it'+(it===cur?' cur':'');
+    t.innerHTML = `<div class="th"></div><div class="nm" title="${esc(it.name)}">${esc(it.name)}</div><div class="st">${it.W}×${it.H}${it.dirty?' · 待处理':' · 背景 '+Math.round(it.ratio*100)+'%'}</div><button class="x" title="移除">×</button>`;
+    t.querySelector('.th').appendChild(it.thumb);
+    t.onclick = e=>{ if(e.target.closest('.x')) return; cur = it; renderStrip(); refresh(); };
+    t.querySelector('.x').onclick = ()=>{ items = items.filter(x=>x!==it); URL.revokeObjectURL(it.url); if(cur===it) cur = items[0]||null; renderStrip(); refresh(); };
+    s.appendChild(t);
+  });
+  const n = items.length;
+  ['tbZip','tbToCompress','tbToGif','tbClear'].forEach(id=>$(id).disabled = !n);
+  $('tbOne').disabled = !cur;
+  $('tbZip').textContent = n > 1 ? `全部下载 ${n} 张（ZIP）` : '下载';
+}
+function drawThumb(it){
+  const src = it.dirty ? it.img : it.canvas, w = src.width||it.W, h = src.height||it.H;
+  const s = Math.min(1, 220/Math.max(w,h));
+  it.thumb.width = Math.max(1,Math.round(w*s)); it.thumb.height = Math.max(1,Math.round(h*s));
+  const x = it.thumb.getContext('2d'); x.clearRect(0,0,it.thumb.width,it.thumb.height); x.drawImage(src,0,0,it.thumb.width,it.thumb.height);
+}
+const esc = s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ============================== 处理与预览 ============================== */
+let bgToken = 0;
+function ensure(it){ if(it.dirty){ removeBg(it); drawThumb(it); } return it; }
+function refresh(){
+  const my = ++bgToken;
+  if(cur){ ensure(cur); }
+  drawPreview(); renderStrip(); updateTools();
+  // 其余图片在后台逐张处理，缩略图随之更新
+  const rest = items.filter(it=>it.dirty);
+  (function next(){
+    if(my !== bgToken) return;
+    const it = rest.shift(); if(!it) { renderStrip(); return; }
+    if(it.dirty){ removeBg(it); drawThumb(it); }
+    setTimeout(next, 0);
+  })();
+}
+function markAll(){ items.forEach(it=>{ it.dirty = true; }); refresh(); }
+function drawPreview(){
+  const pv = $('pv');
+  $('stageEmpty').classList.toggle('hidden', !!cur); pv.classList.toggle('hidden', !cur);
+  if(!cur){ $('pvInfo').textContent = '—'; $('detected').textContent = '—'; return; }
+  const src = showOrig ? cur.img : cur.canvas;
+  pv.width = showOrig ? cur.W : cur.canvas.width; pv.height = showOrig ? cur.H : cur.canvas.height;
+  const x = pv.getContext('2d'); x.clearRect(0,0,pv.width,pv.height); x.drawImage(src,0,0);
+  $('pvInfo').textContent = `${cur.name} · ${pv.width} × ${pv.height} px${showOrig?' · 原图':''} · 去掉了 ${Math.round(cur.ratio*100)}% 的像素${cur.ops.length?` · 手动修改 ${cur.ops.length} 处`:''}`;
+  const c = cur.detected;
+  $('detected').innerHTML = c ? `<span class="swatch" style="background:${rgbHex(c)}"></span>${P.mode==='auto'?'识别到的背景色':'指定的背景色'} ${rgbHex(c).toUpperCase()}` : '—';
+}
+function updateTools(){
+  $('undo').disabled = !cur || !cur.ops.length; $('resetOps').disabled = !cur || !cur.ops.length;
+  $('holdOrig').disabled = !cur; $('zoomBtn').disabled = !cur;
+  $('stage').classList.toggle('cursor-wand', tool!=='pick'); $('stage').classList.toggle('cursor-pick', tool==='pick');
+}
+
+// 点击预览图
+$('pv').addEventListener('click', e=>{
+  if(!cur || showOrig) return;
+  const r = $('pv').getBoundingClientRect();
+  let x = Math.floor((e.clientX - r.left) * $('pv').width / r.width) + cur.trimOff[0];
+  let y = Math.floor((e.clientY - r.top) * $('pv').height / r.height) + cur.trimOff[1];
+  x = Math.max(0, Math.min(cur.W-1, x)); y = Math.max(0, Math.min(cur.H-1, y));
+  if(tool === 'pick'){
+    const c = document.createElement('canvas'); c.width = 1; c.height = 1;
+    const cx = c.getContext('2d'); cx.drawImage(cur.img, x, y, 1, 1, 0, 0, 1, 1);
+    const p = cx.getImageData(0,0,1,1).data;
+    P.mode = 'color'; P.bgColor = rgbHex([p[0],p[1],p[2]]); save(); syncControls();
+    setStatus(`已选背景色 ${P.bgColor.toUpperCase()}，所有图片按这个颜色重新处理`);
+    markAll(); return;
+  }
+  cur.ops.push({x, y, mode:tool}); cur.dirty = true; refresh();
+});
+$('undo').onclick = ()=>{ if(!cur||!cur.ops.length) return; cur.ops.pop(); cur.dirty = true; refresh(); };
+$('resetOps').onclick = ()=>{ if(!cur) return; cur.ops = []; cur.dirty = true; refresh(); };
+const holdOn = ()=>{ if(!cur) return; showOrig = true; drawPreview(); }, holdOff = ()=>{ if(!showOrig) return; showOrig = false; drawPreview(); };
+$('holdOrig').addEventListener('pointerdown', holdOn);
+['pointerup','pointerleave','pointercancel'].forEach(ev=>$('holdOrig').addEventListener(ev, holdOff));
+$('zoomBtn').onclick = ()=>{ zoom = !zoom; $('stage').classList.toggle('zoom', zoom); $('zoomBtn').textContent = zoom ? '适应窗口' : '100%'; };
+$('bgs').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+  backdrop = b.dataset.v; $('bgs').querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b));
+  const st = $('stage'); st.classList.toggle('b-chk', backdrop==='b-chk'); st.style.background = backdrop==='b-chk' ? '' : backdrop;
+});
+
+/* ============================== 设置控件 ============================== */
+function seg(id, onPick){
+  $(id).querySelectorAll('button').forEach(b=>b.onclick=()=>onPick(b.dataset.v));
+}
+function syncSeg(id, v){ $(id).querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.v===String(v))); }
+function syncControls(){
+  syncSeg('modeSeg', P.mode); $('bgColor').classList.toggle('hidden', P.mode!=='color'); $('bgColor').value = P.bgColor;
+  $('tol').value = P.tol; $('tolV').textContent = P.tol;
+  $('holes').checked = P.holes; $('global').checked = P.global; $('holes').disabled = P.global;
+  $('smooth').checked = P.smooth; syncSeg('shrinkSeg', P.shrink); syncSeg('fmtSeg', P.fmt); $('trim').checked = P.trim;
+  syncSeg('toolSeg', tool);
+  $('resetP').disabled = Object.keys(DEFAULTS).every(k=>P[k]===DEFAULTS[k]);
+}
+const set = (k, v, reprocess=true)=>{ P[k] = v; save(); syncControls(); if(reprocess) markAll(); };
+$('resetP').onclick = ()=>{ Object.assign(P, DEFAULTS); syncControls(); markAll(); setStatus('已恢复建议值'); };
+seg('modeSeg', v=>set('mode', v));
+$('bgColor').onchange = ()=>set('bgColor', $('bgColor').value);
+$('tol').oninput = ()=>{ $('tolV').textContent = $('tol').value; };
+$('tol').onchange = ()=>set('tol', +$('tol').value);
+$('holes').onchange = ()=>set('holes', $('holes').checked);
+$('global').onchange = ()=>set('global', $('global').checked);
+$('smooth').onchange = ()=>set('smooth', $('smooth').checked);
+seg('shrinkSeg', v=>set('shrink', +v));
+seg('fmtSeg', v=>set('fmt', v, false));
+$('trim').onchange = ()=>set('trim', $('trim').checked);
+seg('toolSeg', v=>{ tool = v; syncControls(); updateTools();
+  $('pvTip').textContent = v==='pick' ? '在预览图上点一下背景，就按这个颜色去除。' : '没去干净的地方用「点哪去哪」点一下；误删的地方用「点哪恢复哪」点回来。'; });
+
+/* ============================== 导出 ============================== */
+function outName(it){ return it.name.replace(/\.[^.]+$/,'') + '_去背景.' + (P.fmt==='webp'?'webp':'png'); }
+async function outBlob(it){
+  ensure(it);
+  if(it.blob && it.blobFmt === P.fmt) return it.blob;
+  const type = P.fmt==='webp' ? 'image/webp' : 'image/png';
+  let b = await new Promise(r=>it.canvas.toBlob(r, type, 1));
+  if(!b || b.type !== type){ b = await new Promise(r=>it.canvas.toBlob(r, 'image/png')); setStatus('当前浏览器不支持导出 WebP，已改为 PNG', true); }
+  it.blob = b; it.blobFmt = P.fmt; return b;
+}
+async function allOut(){
+  const list = [];
+  for(let i=0;i<items.length;i++){ setStatus(`正在生成 ${i+1}/${items.length}…`); await new Promise(r=>setTimeout(r,0)); const it = items[i]; list.push({name:outName(it), blob:await outBlob(it)}); }
+  setStatus(''); return list;
+}
+$('tbOne').onclick = async ()=>{ if(!cur) return; const b = await outBlob(cur); Site.download(b, outName(cur)); setStatus(`已下载 ${outName(cur)}（${fmtSize(b.size)}）`); };
+$('tbZip').onclick = async ()=>{
+  if(items.length === 1) return $('tbOne').onclick();
+  const list = await allOut(), z = await Site.zip(list), name = `去背景_${list.length}张_${Site.stamp()}.zip`;
+  Site.download(z, name); setStatus(`已下载 ${name}（${fmtSize(z.size)}）`);
+};
+$('tbToCompress').onclick = async ()=>{ const list = await allOut(); if(list.length > 30) setStatus('压缩工具一次最多 30 张，只送前 30 张', true); Site.send(list.slice(0,30), 'compress'); };
+$('tbToGif').onclick = async ()=>{ const list = await allOut(); Site.send(list, 'gif'); };
+$('tbClear').onclick = ()=>{ items.forEach(it=>URL.revokeObjectURL(it.url)); items = []; cur = null; renderStrip(); refresh(); };
+const fmtSize = n=> n>=1048576 ? (n/1048576).toFixed(2)+' MB' : Math.max(1,Math.round(n/1024))+' KB';
+function setStatus(t, warn){ $('status').textContent = t; $('status').style.color = warn ? 'var(--warn)' : ''; }
+
+/* ============================== 添加方式：选择 / 拖入 / 粘贴 / 别的页面送来 ============================== */
+$('tbAdd').onclick = ()=>$('picker').click();
+$('picker').onchange = e=>{ addFiles([...e.target.files]); e.target.value=''; };
+let dragDepth = 0;
+const isFileDrag = e=>[...(e.dataTransfer?.types||[])].includes('Files');
+document.addEventListener('dragenter', e=>{ if(isFileDrag(e)){ dragDepth++; $('strip').classList.add('over'); } });
+document.addEventListener('dragleave', e=>{ if(isFileDrag(e) && --dragDepth<=0){ dragDepth=0; $('strip').classList.remove('over'); } });
+document.addEventListener('dragover', e=>e.preventDefault());
+document.addEventListener('drop', e=>{ e.preventDefault(); dragDepth=0; $('strip').classList.remove('over'); if(e.dataTransfer.files.length) addFiles([...e.dataTransfer.files]); });
+document.addEventListener('paste', e=>{
+  const files = [...(e.clipboardData?.items||[])].filter(it=>it.kind==='file').map(it=>it.getAsFile()).filter(Boolean);
+  if(files.length) addFiles(files);
+});
+syncControls(); renderStrip(); refresh();
+(async function(){ const got = await Site.take(); if(got && got.length){ await addFiles(Site.toFiles(got)); Site.toast('已接收 '+got.length+' 张图片'); } })();
+</script>
+</body>
+</html>

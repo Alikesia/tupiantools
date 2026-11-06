@@ -1,0 +1,84 @@
+/* ============================================================
+   图片工具箱 · 共用样式
+   工作区用中性灰（不偏色，看图颜色准），只有一个强调色：万寿菊黄。
+   ============================================================ */
+:root{
+  --ws:#1c1d20;        /* 工作区底色 */
+  --panel:#242529;     /* 面板 */
+  --raised:#2d2e33;    /* 抬起的表面、悬停 */
+  --edge:#36383e;      /* 边线 */
+  --edge2:#45474e;
+  --ink:#ededef;       /* 文字 */
+  --dim:#9a9ba3;       /* 次要文字 */
+  --hi:#ffc93c;        /* 强调色 */
+  --on-hi:#231a00;     /* 强调色上的文字 */
+  --ok:#5bd39a;        /* 成功、节省 */
+  --bad:#f07272;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --ws:#f2f2f3; --panel:#ffffff; --raised:#ececee; --edge:#dcdce0; --edge2:#c9cacf;
+  --ink:#1d1e21; --dim:#6b6d75; --hi:#ffc93c; --on-hi:#231a00; --ok:#1f9d62; --bad:#d64545;
+  color-scheme:light;
+}
+
+/* ---------------- 顶部：品牌 + 工具标签 ---------------- */
+.appbar{
+  display:flex;align-items:flex-end;gap:22px;flex:none;
+  border-bottom:1px solid var(--edge);
+  margin:0 0 16px;padding:10px 0 0;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  color:var(--ink);
+}
+.appbar .brand{display:flex;align-items:center;padding-bottom:20px;flex:none;white-space:nowrap}
+.appbar .brand b{font-size:16px;font-weight:700;letter-spacing:.4px}
+
+.tabs-app{display:flex;gap:4px;min-width:0;overflow-x:auto;scrollbar-width:none;margin-bottom:-1px}
+.tabs-app::-webkit-scrollbar{display:none}
+.tabs-app a{
+  position:relative;display:flex;align-items:center;gap:11px;flex:none;
+  padding:11px 20px 12px 14px;
+  border:1px solid transparent;border-bottom:0;border-radius:10px 10px 0 0;
+  color:var(--dim);text-decoration:none;
+  transition:background-color .15s,color .15s;
+}
+.tabs-app a:hover{background:var(--panel);color:var(--ink)}
+.tabs-app a .ic{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:var(--raised);color:var(--ink);flex:none;transition:background-color .15s,color .15s}
+.tabs-app a .ic svg{width:19px;height:19px}
+.tabs-app a .t{display:flex;flex-direction:column;line-height:1.25}
+.tabs-app a .t b{font-size:15px;font-weight:650;color:inherit}
+.tabs-app a .t small{font-size:12px;color:var(--dim);margin-top:2px}
+.tabs-app a.on{background:var(--panel);border-color:var(--edge);color:var(--ink)}
+.tabs-app a.on::before{content:"";position:absolute;left:-1px;right:-1px;top:-1px;height:3px;border-radius:10px 10px 0 0;background:var(--hi)}
+.tabs-app a.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;background:var(--panel)}
+.tabs-app a.on .ic{background:var(--hi);color:var(--on-hi)}
+.tabs-app a:focus-visible{outline:2px solid var(--hi);outline-offset:-2px}
+
+.appbar .side{margin-left:auto;padding-bottom:14px;display:flex;align-items:center;gap:14px}
+.appbar .local{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dim);white-space:nowrap}
+.appbar .local svg{width:14px;height:14px}
+@media (max-width:1100px){ .appbar .local{display:none} }
+.themeBtn{display:flex;align-items:center;gap:6px;border:1px solid var(--edge);background:var(--panel);color:var(--ink);
+  border-radius:8px;padding:6px 11px;font:500 13px/1.2 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;cursor:pointer;white-space:nowrap}
+.themeBtn:hover{border-color:var(--edge2)}
+.themeBtn:focus-visible{outline:2px solid var(--hi);outline-offset:2px}
+.themeBtn svg{width:15px;height:15px}
+@media (max-width:860px){
+  .appbar{gap:12px}
+    .tabs-app a{padding:9px 12px 10px 10px;gap:8px}
+  .tabs-app a .t small{display:none}
+  .tabs-app a .ic{width:28px;height:28px}
+  .themeBtn span{display:none}
+}
+
+/* 页面之间传图时的提示条 */
+.handoffToast{
+  position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:9999;
+  background:var(--hi);color:var(--on-hi);font:600 13px/1.4 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;
+  padding:9px 16px;border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.45);
+  transition:opacity .3s;
+}
+@media (prefers-reduced-motion:reduce){ .tabs-app a,.tabs-app a .ic,.handoffToast{transition:none} }
+
+:root[data-theme="light"] .tabs-app a.on .ic{color:var(--on-hi)}
+:root[data-theme="light"] .handoffToast{box-shadow:0 8px 28px rgba(0,0,0,.18)}

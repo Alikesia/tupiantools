@@ -1,0 +1,768 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>动图合成工具</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js"></script>
+<style>
+:root{
+  --bg:#f4f4f2; --panel:#ffffff; --line:#e3e2de; --text:#1d1d1b; --muted:#77756f;
+  --accent:#2f6df6; --accent-soft:#e8efff; --ok:#1f9d55; --warn:#c2410c; --danger:#e5484d; --chk1:#e9e8e4; --chk2:#f7f7f5;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#151514; --panel:#1f1f1d; --line:#33322f; --text:#ecebe7; --muted:#9a988f;
+    --accent:#5b8cff; --accent-soft:#1f2a44; --ok:#4ade80; --warn:#fb923c; --chk1:#2a2a27; --chk2:#232321;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#151514; --panel:#1f1f1d; --line:#33322f; --text:#ecebe7; --muted:#9a988f;
+  --accent:#5b8cff; --accent-soft:#1f2a44; --ok:#4ade80; --warn:#fb923c; --chk1:#2a2a27; --chk2:#232321;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif}
+.wrap{max-width:960px;margin:0 auto;padding:16px 24px 32px}
+@media (max-width:720px){.wrap{padding:12px 16px 24px}}
+header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+h1{font-size:19px;margin:0;font-weight:650}
+header p{margin:0;color:var(--muted);font-size:13px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.card h2{font-size:13px;font-weight:600;margin:0 0 10px;color:var(--muted)}
+.cols{display:grid;grid-template-columns:320px 1fr;gap:14px;margin-top:14px;align-items:start}
+.cols>section>.card+.card{margin-top:14px}
+@media (max-width:760px){.cols{grid-template-columns:1fr}}
+
+/* 工具栏 */
+.toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.tb{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:8px;padding:5px 10px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.tb:hover:not(:disabled){border-color:var(--muted)}
+.tb:disabled{opacity:.4;cursor:not-allowed}
+.tb.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.tb.danger{color:var(--danger)}
+.sep{width:1px;height:20px;background:var(--line);margin:0 4px}
+.toolbar select{padding:5px 6px}
+.toolbar .dl{display:flex;align-items:center;gap:4px;font-size:13px;color:var(--muted)}
+.toolbar .dl input{width:64px;padding:4px 6px}
+.counts{margin:10px 0 8px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+
+/* 缩略图墙 */
+.grid{max-height:332px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start;min-height:120px;transition:background .15s,border-color .15s}
+.grid.over{border-color:var(--accent);background:var(--accent-soft)}
+.grid .emptyHint{width:100%;min-height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);font-size:13px;cursor:pointer;gap:2px}
+.grid .emptyHint b{color:var(--accent);font-size:14px}
+.tile{width:108px;border:1px solid var(--line);border-radius:8px;background:var(--panel);overflow:hidden;position:relative;cursor:pointer;user-select:none;transition:border-color .1s,opacity .15s}
+.tile.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.tile.skip .thumb,.tile.skip .name{opacity:.35}
+.tile.dragging{opacity:.35}
+.tile.dropbefore{box-shadow:-3px 0 0 0 var(--accent)}
+.tile .thumb{height:64px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:repeating-conic-gradient(var(--chk1) 0 25%,var(--chk2) 0 50%) 0 0/10px 10px}
+.tile .thumb img{max-width:100%;max-height:100%;display:block;pointer-events:none}
+.tile .chk{position:absolute;top:4px;left:4px;width:16px;height:16px;border-radius:4px;border:1.5px solid #fff;background:rgba(0,0,0,.35);box-shadow:0 0 0 1px rgba(0,0,0,.2)}
+.tile.sel .chk{background:var(--accent);border-color:var(--accent)}
+.tile.sel .chk::after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.tile .no{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;font-weight:600;border-radius:4px;padding:0 5px}
+.tile .skipTag{position:absolute;top:24px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);color:#fff;font-size:11px;border-radius:4px;padding:1px 6px;display:none}
+.tile.skip .skipTag{display:block}
+.tile .body{padding:4px 6px 6px}
+.tile .name{font-size:10.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .dl{display:flex;align-items:center;gap:3px;font-size:10.5px;color:var(--muted);margin:3px 0 4px;white-space:nowrap}
+.tile .dl input{width:50px;padding:1px 4px;font-size:11px;border-radius:5px}
+.tile .acts{display:flex;gap:3px}
+.tile .acts button{flex:1;border:0;border-radius:5px;padding:3px 0;font:inherit;font-size:10.5px;font-weight:600;cursor:pointer;color:#fff}
+.tile .acts .sk{background:#8a8780}
+.tile .acts .cp{background:var(--accent)}
+.tile .acts .del{background:var(--danger)}
+.tile .acts button:hover{filter:brightness(1.08)}
+
+/* 设置 */
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0}
+.row>.lbl{width:64px;color:var(--muted);font-size:13px;flex:none;white-space:nowrap}
+input[type=number],input[type=text],select{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:5px 8px;font:inherit;font-size:13px}
+input[type=number]{width:76px}
+input[type=range]{flex:1;min-width:100px;accent-color:var(--accent)}
+input[type=color]{width:34px;height:28px;border:1px solid var(--line);border-radius:7px;background:var(--bg);padding:2px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:transparent;color:var(--text);padding:5px 8px;font:inherit;font-size:13px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--accent);color:#fff}
+.hint{color:var(--muted);font-size:12px;margin:2px 0 0}
+
+/* 预览 & 制作 */
+.preview{position:relative;display:flex;align-items:center;justify-content:center;min-height:150px;border-radius:10px;overflow:hidden;padding:10px;background:repeating-conic-gradient(var(--chk1) 0 25%,var(--chk2) 0 50%) 0 0/16px 16px}
+.preview canvas{max-width:100%;max-height:200px;display:block}
+.preview .empty{color:var(--muted);font-size:13px;text-align:center}
+.preview .stale{position:absolute;inset:0;background:color-mix(in srgb,var(--panel) 78%,transparent);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--text);text-align:center;padding:10px}
+.pvbar{display:flex;justify-content:space-between;margin-top:8px;color:var(--muted);font-size:12px;gap:8px;flex-wrap:wrap}
+.make{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+.btn{border:0;border-radius:9px;padding:9px 18px;font:inherit;font-weight:600;cursor:pointer;background:var(--accent);color:#fff}
+.btn.big{padding:10px 26px;font-size:15px}
+.btn.secondary{background:transparent;color:var(--text);border:1px solid var(--line)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.pulse{animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 45%,transparent)}50%{box-shadow:0 0 0 6px transparent}}
+.makeHint{font-size:12px;color:var(--muted)}
+.makeHint.warn{color:var(--warn)}
+.sizes{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.sz{border:1px solid var(--line);border-radius:10px;padding:9px 12px}
+.sz .k{color:var(--muted);font-size:12px}
+.sz .v{font-size:19px;font-weight:650;margin-top:1px;font-variant-numeric:tabular-nums}
+.sz .d{color:var(--muted);font-size:12px;min-height:18px}
+.sz.busy .v{opacity:.4}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:5px;margin-left:6px;vertical-align:3px;font-weight:600}
+.tag.ok{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+.tag.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.status{color:var(--muted);font-size:13px;margin-top:8px;min-height:20px}
+.notice{background:color-mix(in srgb,var(--warn) 12%,transparent);color:var(--warn);border-radius:8px;padding:8px 10px;font-size:12px;margin-top:10px;display:none}
+.hidden{display:none!important}
+
+/* ---- 全站统一配色：中性灰 + 万寿菊黄 ---- */
+:root[data-theme="dark"]{
+  --bg:#1c1d20; --panel:#242529; --line:#36383e; --text:#ededef; --muted:#9a9ba3;
+  --accent:#ffc93c; --accent-soft:#3a321c; --ok:#5bd39a; --warn:#ffd36b; --danger:#f07272; --chk1:#2b2c30; --chk2:#232427;
+}
+:root[data-theme="light"]{
+  --bg:#f2f2f3; --panel:#ffffff; --line:#dcdce0; --text:#1d1e21; --muted:#6b6d75; --accent:#ffc93c; --accent-soft:#fff3cf; --ok:#1f9d62; --warn:#9a6a00; --danger:#d64545; --chk1:#e6e6e9; --chk2:#f6f6f7;
+}
+:root{--btn:#36383e;--btn-hover:#45474e;--btn-del:#f49a9a}
+:root[data-theme="light"]{--btn:#ececee;--btn-hover:#dcdce0;--btn-del:#c23b3b}
+.wrap{max-width:1440px;padding:0 20px 32px}
+.tb.primary,.btn:not(.secondary),.seg button.on,.tile .acts .cp{color:#231a00}
+.tile.sel .chk::after{border-color:#231a00}
+/* 帧上的小按钮保持低调，黄色只留给主操作 */
+.tile .acts button,.tile .acts .sk,.tile .acts .cp,.tile .acts .del{background:var(--btn);color:var(--text);font-weight:500}
+.tile .acts .del{color:var(--btn-del)}
+.tile .acts button:hover{background:var(--btn-hover);filter:none}
+#loopN{width:52px!important}
+.cols .row>.lbl{width:56px}
+#loopSeg button{padding:5px 7px}
+.viewTabs{display:none!important}
+.viewTabs{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin:2px 0 12px}
+.viewTabs button{border:0;background:var(--panel);color:var(--text);padding:7px 18px;font:inherit;font-weight:600;cursor:pointer}
+.viewTabs button+button{border-left:1px solid var(--line)}
+.viewTabs button.on{background:var(--accent);color:#03150b}
+/* 拆解：帧更大一些 */
+#spGrid{max-height:calc(100vh - 260px);min-height:220px}
+#spGrid .tile{width:150px}
+#spGrid .tile .thumb{height:110px}
+#spGrid .tile .name{font-size:12px;color:var(--muted);margin-bottom:5px}
+.spInfo{font-size:13px;color:var(--text);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="appbar" data-active="gif"></header>
+
+<div class="viewTabs" id="viewTabs"><button data-v="make" class="on">合成动图</button><button data-v="split">拆解 GIF</button></div>
+
+<!-- ======== 拆解 ======== -->
+<div id="viewSplit" class="hidden">
+<div class="card">
+  <div class="toolbar">
+    <button class="tb" id="spAdd">＋ 选择 GIF / WebP 动图</button>
+    <span class="sep"></span>
+    <button class="tb" id="spAll">全选</button>
+    <button class="tb" id="spNone">取消选择</button>
+    <span class="sep"></span>
+    <button class="tb primary" id="spZip">全部下载（ZIP）</button>
+    <button class="tb" id="spSend">全部送去合成</button>
+    <button class="tb danger" id="spClear" style="margin-left:auto">清空</button>
+  </div>
+  <div class="counts"><span class="spInfo" id="spInfo">还没有动图</span><span id="spCount"></span></div>
+  <div class="grid" id="spGrid"></div>
+  <p class="hint" style="margin-top:8px">每一帧都还原成完整画面（PNG，保留透明）。文件名格式：原名_帧序号_停留时间.png，方便以后按顺序重新合成。</p>
+  <input type="file" id="spPicker" accept="image/gif,image/webp" hidden>
+</div>
+</div>
+
+<!-- ======== 合成 ======== -->
+<div id="viewMake">
+
+<!-- 图片 -->
+<div class="card">
+  <div class="toolbar">
+    <button class="tb" id="tbAdd">＋ 添加图片</button>
+    <span class="sep"></span>
+    <button class="tb" id="tbAll">全选</button>
+    <button class="tb" id="tbNone">取消选择</button>
+    <span class="sep"></span>
+    <span class="dl">停留 <input type="number" id="delayAll" min="20" step="50" value="500"> ms</span>
+    <button class="tb" id="tbDelay">应用到全部</button>
+    <span class="sep"></span>
+    <button class="tb" id="tbCopy" disabled>复制</button>
+    <button class="tb" id="tbSkip" disabled>跳过</button>
+    <button class="tb danger" id="tbDel" disabled>删除</button>
+    <span class="sep"></span>
+    <select id="tbSort">
+      <option value="">排序…</option>
+      <option value="az">按文件名 A→Z</option>
+      <option value="za">按文件名 Z→A</option>
+      <option value="rev">整体倒序</option>
+    </select>
+    <button class="tb danger" id="tbClear" style="margin-left:auto">清空</button>
+  </div>
+  <div class="counts"><span id="counts">还没有图片</span><span>点击选中 · ⇧Shift 连选 · 拖动调整顺序 · 可 ⌘V 粘贴</span></div>
+  <div class="grid" id="grid"></div>
+  <input type="file" id="picker" accept="image/*" multiple hidden>
+</div>
+
+<div class="cols">
+  <section>
+    <div class="card">
+      <h2>播放</h2>
+      <div class="row"><span class="lbl">循环</span>
+        <div class="seg" id="loopSeg"><button data-v="inf" class="on">无限循环</button><button data-v="n">指定次数</button></div>
+        <input type="number" id="loopN" min="1" value="3" class="hidden" style="width:60px"> <span id="loopUnit" class="hidden">次</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>尺寸</h2>
+      <div class="row"><span class="lbl">缩放</span>
+        <div class="seg" id="scaleSeg">
+          <button data-v="1" class="on">原图</button><button data-v="0.75">75%</button><button data-v="0.5">50%</button><button data-v="custom">自定宽度</button>
+        </div>
+      </div>
+      <div class="row hidden" id="customRow"><span class="lbl">宽度</span>
+        <input type="number" id="customW" min="16" step="10" value="750"> px <span class="hint">高度按比例</span>
+      </div>
+      <div class="row"><span class="lbl">尺寸不一</span>
+        <select id="fit">
+          <option value="cover">裁剪填满（以第一张为准）</option>
+          <option value="contain">完整显示（四周留白）</option>
+          <option value="stretch">拉伸</option>
+        </select>
+      </div>
+      <div class="row" id="bgRow"><span class="lbl">留白颜色</span>
+        <div class="seg" id="bgSeg"><button data-v="transparent" class="on">透明</button><button data-v="color">纯色</button></div>
+        <input type="color" id="bgColor" value="#ffffff" class="hidden">
+      </div>
+      <p class="hint" id="outDim">输出尺寸：—</p>
+    </div>
+
+    <div class="card">
+      <h2>体积</h2>
+      <div class="row"><span class="lbl">目标体积</span>
+        <div class="seg" id="targetSeg"><button data-v="off" class="on">不限</button><button data-v="on">不超过</button></div>
+        <input type="number" id="targetKB" min="10" step="50" value="500" class="hidden" style="width:70px"> <span id="kbUnit" class="hidden">KB</span>
+      </div>
+      <p class="hint" id="targetHint">自动降低画质 / 颜色，必要时再缩小尺寸，直到满足体积。</p>
+      <div id="manualQ">
+        <div class="row"><span class="lbl">WebP 画质</span>
+          <input type="range" id="webpQ" min="30" max="100" value="85"><span id="webpQv" style="width:28px;text-align:right">85</span>
+        </div>
+        <div class="row"><span class="lbl">GIF 颜色</span>
+          <select id="gifColors"><option>256</option><option>128</option><option>64</option><option>32</option><option>16</option></select>
+          <label style="display:flex;align-items:center;gap:5px;color:var(--muted);font-size:13px"><input type="checkbox" id="dither" checked> 抖动</label>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
+      <h2>预览</h2>
+      <div class="preview" id="previewBox">
+        <div class="empty" id="emptyTip">添加至少 2 张图片，然后点「制作」</div>
+        <canvas id="pv" class="hidden"></canvas>
+        <div class="stale hidden" id="staleCover">图片有增减，点「制作」更新</div>
+      </div>
+      <div class="pvbar"><span id="pvInfo">—</span><span id="pvDim"></span></div>
+      <div class="make">
+        <button class="btn big" id="makeBtn" disabled>▶ 制作</button>
+        <span class="makeHint" id="makeHint">添加或删除图片后需要点一次制作；之后改尺寸、体积会自动更新。</span>
+      </div>
+      <div class="sizes">
+        <div class="sz" id="szWebp"><div class="k">WebP 预计体积</div><div class="v">—</div><div class="d"></div></div>
+        <div class="sz" id="szGif"><div class="k">GIF 预计体积</div><div class="v">—</div><div class="d"></div></div>
+      </div>
+      <div class="btns">
+        <button class="btn" id="exWebp" disabled>导出 WebP</button>
+        <button class="btn" id="exGif" disabled>导出 GIF</button>
+        <button class="btn secondary" id="exBoth" disabled>两个都导出</button>
+      </div>
+      <div class="notice" id="safariNotice">当前浏览器不支持生成 WebP，请用 Chrome 打开。GIF 不受影响。</div>
+      <div class="status" id="status"></div>
+    </div>
+  </section>
+</div>
+</div><!-- /viewMake -->
+</div>
+
+<script>
+/* ============================== 状态 ============================== */
+const S = {
+  frames: [],          // {id, img, thumb, name, w, h, delay, skip}
+  loop:'inf', loopN:3, scale:'1', customW:750, fit:'cover', bg:'transparent', bgColor:'#ffffff',
+  target:'off', targetKB:500, webpQ:85, gifColors:256, dither:true, delayAll:500,
+};
+const KEYS=['loop','loopN','scale','customW','fit','bg','bgColor','target','targetKB','webpQ','gifColors','dither','delayAll'];
+const $ = id => document.getElementById(id);
+const store = {
+  load(){ try{ const v=JSON.parse(localStorage.getItem('gifTool.v2')||'{}'); for(const k of KEYS) if(k in v) S[k]=v[k]; }catch(e){} },
+  save(){ try{ const o={}; for(const k of KEYS) o[k]=S[k]; localStorage.setItem('gifTool.v2',JSON.stringify(o)); }catch(e){} }
+};
+const WEBP_OK=(()=>{ try{ const c=document.createElement('canvas'); c.width=c.height=2; return c.toDataURL('image/webp').startsWith('data:image/webp'); }catch(e){ return false; } })();
+const sel = new Set();      // 选中的 id
+let lastClick = -1;         // Shift 连选起点
+let framesVer = 0, madeVer = -1;   // 图片增减版本 / 已制作版本
+const active = ()=>S.frames.filter(f=>!f.skip);
+const needsMake = ()=> framesVer!==madeVer;
+const ready = ()=> !needsMake() && active().length>=2;
+
+/* ============================== 添加图片 ============================== */
+let fid=0;
+async function loadImage(file){
+  const url=URL.createObjectURL(file);
+  const img=new Image(); img.src=url; await img.decode();
+  // 缩略图（减轻几十张大图时的页面负担）
+  const s=Math.min(1, 220/Math.max(img.naturalWidth,img.naturalHeight));
+  const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(img.naturalWidth*s)); c.height=Math.max(1,Math.round(img.naturalHeight*s));
+  c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+  const thumb=URL.createObjectURL(await new Promise(r=>c.toBlob(r,'image/png')));
+  return {id:++fid, img, thumb, name:file.name||'粘贴的图片', w:img.naturalWidth, h:img.naturalHeight, delay:clampDelay(S.delayAll), skip:false};
+}
+async function addFiles(files){
+  const imgs=files.filter(f=>f.type.startsWith('image/'));
+  if(files.length && !imgs.length){ setStatus('只能添加图片文件（JPG / PNG / WebP / GIF 等）',true); return; }
+  imgs.sort((a,b)=>a.name.localeCompare(b.name,'zh-CN',{numeric:true,sensitivity:'base'})); // 同一批按文件名自然顺序
+  let n=0;
+  for(const file of imgs){
+    setStatus(`正在读取图片 ${++n}/${imgs.length}…`);
+    try{ S.frames.push(await loadImage(file)); }catch(e){ setStatus('这张图片读取失败：'+file.name,true); }
+  }
+  setStatus(imgs.some(f=>f.type==='image/gif') ? '提示：GIF 放进合成只会用第一帧。想拆成每一帧，请切换到「拆解 GIF」。' : '');
+  framesChanged();
+}
+$('picker').onchange=e=>{ addFiles([...e.target.files]); e.target.value=''; };
+$('tbAdd').onclick=()=>$('picker').click();
+const isFileDrag=e=>[...(e.dataTransfer?.types||[])].includes('Files');
+let dragDepth=0;
+document.addEventListener('dragenter',e=>{ if(isFileDrag(e)){ dragDepth++; $(view==='split'?'spGrid':'grid').classList.add('over'); } });
+document.addEventListener('dragleave',e=>{ if(isFileDrag(e)&&--dragDepth<=0){ dragDepth=0; $('grid').classList.remove('over'); $('spGrid').classList.remove('over'); } });
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',e=>{ e.preventDefault(); dragDepth=0; $('grid').classList.remove('over'); $('spGrid').classList.remove('over'); if(!e.dataTransfer.files.length) return; if(view==='split') splitFile(e.dataTransfer.files[0]); else addFiles([...e.dataTransfer.files]); });
+document.addEventListener('paste',e=>{
+  if(e.target.matches&&e.target.matches('input')) return;
+  const files=[...(e.clipboardData?.items||[])].filter(it=>it.kind==='file').map(it=>it.getAsFile()).filter(Boolean);
+  if(!files.length) return;
+  if(view==='split') splitFile(files[0]); else addFiles(files);
+});
+function escapeHtml(s){ return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function clampDelay(v){ return Math.max(20,Math.min(60000,Math.round(v||500))); }
+
+/* ============================== 缩略图墙 ============================== */
+let dragFrom=-1;
+function renderGrid(){
+  const g=$('grid'), keepScroll=g.scrollTop; g.innerHTML='';
+  if(!S.frames.length){
+    const h=document.createElement('div'); h.className='emptyHint';
+    h.innerHTML='<b>＋ 把图片拖到这里，或点击添加</b><span>可一次选几十张，也可以 ⌘V 粘贴</span>';
+    h.onclick=()=>$('picker').click(); g.appendChild(h);
+  }
+  let no=0;
+  S.frames.forEach((f,i)=>{
+    const t=document.createElement('div');
+    t.className='tile'+(sel.has(f.id)?' sel':'')+(f.skip?' skip':''); t.draggable=true;
+    t.innerHTML=`<div class="thumb"><img src="${f.thumb}" alt=""></div><span class="chk"></span><span class="no">${f.skip?'–':++no}</span><span class="skipTag">已跳过</span>
+      <div class="body"><div class="name" title="${escapeHtml(f.name)} · ${f.w}×${f.h}">${escapeHtml(f.name)}</div>
+      <div class="dl">停留 <input type="number" min="20" step="50" value="${f.delay}"> ms</div>
+      <div class="acts"><button class="sk">${f.skip?'启用':'跳过'}</button><button class="cp">复制</button><button class="del">删除</button></div></div>`;
+    t.onclick=e=>{
+      if(e.target.closest('input,button')) return;
+      if(e.shiftKey && lastClick>=0){ const [a,b]=[Math.min(lastClick,i),Math.max(lastClick,i)]; for(let k=a;k<=b;k++) sel.add(S.frames[k].id); }
+      else { sel.has(f.id)? sel.delete(f.id) : sel.add(f.id); lastClick=i; }
+      renderGrid();
+    };
+    const inp=t.querySelector('input');
+    inp.onchange=()=>{ f.delay=clampDelay(+inp.value); inp.value=f.delay; settingsChanged(); };
+    t.querySelector('.sk').onclick=()=>{ f.skip=!f.skip; framesChanged(); };
+    t.querySelector('.cp').onclick=()=>{ S.frames.splice(i+1,0,{...f,id:++fid}); framesChanged(); };
+    t.querySelector('.del').onclick=()=>{ S.frames.splice(i,1); sel.delete(f.id); framesChanged(); };
+    t.ondragstart=e=>{ if(e.target.closest('input')){ e.preventDefault(); return; } dragFrom=i; t.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain','tile'); };
+    t.ondragend=()=>{ dragFrom=-1; t.classList.remove('dragging'); g.querySelectorAll('.dropbefore').forEach(x=>x.classList.remove('dropbefore')); };
+    t.ondragover=e=>{ if(dragFrom<0) return; e.preventDefault(); g.querySelectorAll('.dropbefore').forEach(x=>x.classList.remove('dropbefore')); if(dragFrom!==i) t.classList.add('dropbefore'); };
+    t.ondrop=e=>{ if(dragFrom<0) return; e.preventDefault(); e.stopPropagation(); const from=dragFrom; dragFrom=-1; if(from===i) return;
+      const [m]=S.frames.splice(from,1); S.frames.splice(from<i?i-1:i,0,m); lastClick=-1; renderGrid(); settingsChanged(); };
+    g.appendChild(t);
+  });
+  g.scrollTop=keepScroll;
+  // 计数 & 工具栏状态
+  const n=S.frames.length, k=S.frames.filter(f=>f.skip).length, s=sel.size;
+  $('counts').textContent = n? `共 ${n} 张${k?` · 跳过 ${k} 张`:''} · 实际使用 ${n-k} 张${s?` · 已选 ${s} 张`:''}` : '还没有图片';
+  ['tbCopy','tbSkip','tbDel'].forEach(id=>$(id).disabled=!s);
+  $('tbNone').disabled=!s; $('tbAll').disabled=!n||s===n; $('tbClear').disabled=!n; $('tbSort').disabled=n<2;
+  const allSkipped = s && [...sel].every(id=>S.frames.find(f=>f.id===id)?.skip);
+  $('tbSkip').textContent = allSkipped? '启用' : '跳过';
+  $('tbDelay').textContent = s? '应用到所选' : '应用到全部';
+}
+const selected=()=>S.frames.filter(f=>sel.has(f.id));
+$('tbAll').onclick=()=>{ S.frames.forEach(f=>sel.add(f.id)); renderGrid(); };
+$('tbNone').onclick=()=>{ sel.clear(); lastClick=-1; renderGrid(); };
+$('tbDel').onclick=()=>{ S.frames=S.frames.filter(f=>!sel.has(f.id)); sel.clear(); lastClick=-1; framesChanged(); };
+$('tbCopy').onclick=()=>{ const out=[]; for(const f of S.frames){ out.push(f); if(sel.has(f.id)) out.push({...f,id:++fid}); } S.frames=out; framesChanged(); };
+$('tbSkip').onclick=()=>{ const sk=$('tbSkip').textContent==='跳过'; selected().forEach(f=>f.skip=sk); framesChanged(); };
+$('tbDelay').onclick=()=>{ S.delayAll=clampDelay(+$('delayAll').value); $('delayAll').value=S.delayAll; store.save(); (sel.size?selected():S.frames).forEach(f=>f.delay=S.delayAll); renderGrid(); settingsChanged(); };
+$('delayAll').onchange=()=>{ S.delayAll=clampDelay(+$('delayAll').value); $('delayAll').value=S.delayAll; store.save(); };
+$('tbSort').onchange=()=>{
+  const v=$('tbSort').value; $('tbSort').value='';
+  const cmp=(a,b)=>a.name.localeCompare(b.name,'zh-CN',{numeric:true,sensitivity:'base'});
+  if(v==='az') S.frames.sort(cmp); else if(v==='za') S.frames.sort((a,b)=>cmp(b,a)); else if(v==='rev') S.frames.reverse(); else return;
+  lastClick=-1; renderGrid(); settingsChanged();
+};
+$('tbClear').onclick=()=>{ if(!confirmClear()) return; S.frames=[]; sel.clear(); lastClick=-1; framesChanged(); };
+let clearArmed=0;
+function confirmClear(){ // 点两次才清空，避免误触
+  if(Date.now()-clearArmed<2500){ clearArmed=0; $('tbClear').textContent='清空'; return true; }
+  clearArmed=Date.now(); $('tbClear').textContent='再点一次确认';
+  setTimeout(()=>{ if(clearArmed && Date.now()-clearArmed>=2500){ clearArmed=0; $('tbClear').textContent='清空'; } },2600);
+  return false;
+}
+
+/* ============================== 设置控件 ============================== */
+function seg(id,key,onChange){
+  const el=$(id);
+  const sync=()=>el.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.v===String(S[key])));
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>{ S[key]=b.dataset.v; sync(); onChange&&onChange(); store.save(); settingsChanged(); });
+  sync(); onChange&&onChange();
+}
+function bindNum(id,key,fix){ const el=$(id); el.value=S[key]; el.onchange=()=>{ S[key]=fix(+el.value); el.value=S[key]; store.save(); settingsChanged(); }; }
+function initControls(){
+  seg('loopSeg','loop',()=>{ const n=S.loop==='n'; $('loopN').classList.toggle('hidden',!n); $('loopUnit').classList.toggle('hidden',!n); });
+  bindNum('loopN','loopN',v=>Math.max(1,Math.round(v)||1));
+  seg('scaleSeg','scale',()=>$('customRow').classList.toggle('hidden',S.scale!=='custom'));
+  bindNum('customW','customW',v=>Math.max(16,Math.round(v)||16));
+  $('fit').value=S.fit; $('fit').onchange=()=>{ S.fit=$('fit').value; store.save(); settingsChanged(); };
+  seg('bgSeg','bg',()=>$('bgColor').classList.toggle('hidden',S.bg!=='color'));
+  $('bgColor').value=S.bgColor; $('bgColor').onchange=()=>{ S.bgColor=$('bgColor').value; store.save(); settingsChanged(); };
+  seg('targetSeg','target',()=>{ const on=S.target==='on'; $('targetKB').classList.toggle('hidden',!on); $('kbUnit').classList.toggle('hidden',!on); $('manualQ').classList.toggle('hidden',on); $('targetHint').classList.toggle('hidden',!on); });
+  bindNum('targetKB','targetKB',v=>Math.max(10,Math.round(v)||10));
+  $('webpQ').value=S.webpQ; $('webpQv').textContent=S.webpQ;
+  $('webpQ').oninput=()=>{ S.webpQ=+$('webpQ').value; $('webpQv').textContent=S.webpQ; };
+  $('webpQ').onchange=()=>{ store.save(); settingsChanged(); };
+  $('gifColors').value=String(S.gifColors); $('gifColors').onchange=()=>{ S.gifColors=+$('gifColors').value; store.save(); settingsChanged(); };
+  $('dither').checked=S.dither; $('dither').onchange=()=>{ S.dither=$('dither').checked; store.save(); settingsChanged(); };
+  $('delayAll').value=S.delayAll;
+  if(!WEBP_OK) $('safariNotice').style.display='block';
+}
+
+/* ============================== 流程：图片增减 / 设置变化 / 制作 ============================== */
+function framesChanged(){ framesVer++; renderGrid(); updateUI(); }
+function settingsChanged(){ updateUI(); if(ready()){ renderPreview(); scheduleEstimate(); } }
+function updateUI(){
+  const n=active().length, sz=outSize();
+  $('outDim').textContent = sz? `输出尺寸：${sz.w} × ${sz.h} px` : '输出尺寸：—';
+  $('pvDim').textContent = sz? `${sz.w} × ${sz.h} px` : '';
+  $('bgRow').classList.toggle('hidden',S.fit!=='contain');
+  const stale=needsMake();
+  $('makeBtn').disabled = n<2 || busyMake;
+  $('makeBtn').classList.toggle('pulse', stale && n>=2 && madeVer>=0);
+  const hint=$('makeHint');
+  if(n<2){ hint.textContent='至少需要 2 张（未跳过的）图片。'; hint.classList.remove('warn'); }
+  else if(stale && madeVer>=0){ hint.textContent='图片有增减，点「制作」更新预览和体积。'; hint.classList.add('warn'); }
+  else if(stale){ hint.textContent='图片准备好了，点「制作」生成预览和体积。'; hint.classList.remove('warn'); }
+  else { hint.textContent='之后改尺寸、体积、停留时间会自动更新；增删图片后需重新制作。'; hint.classList.remove('warn'); }
+  $('staleCover').classList.toggle('hidden', !(stale && madeVer>=0 && !$('pv').classList.contains('hidden')));
+  const ok=ready();
+  $('exGif').disabled=!ok; $('exWebp').disabled=!ok||!WEBP_OK; $('exBoth').disabled=!ok||!WEBP_OK;
+  if(!ok){ estToken++; clearTimeout(estTimer); ['szWebp','szGif'].forEach(id=>{ $(id).classList.remove('busy'); }); if(stale){ dimSizes(); } }
+}
+function dimSizes(){ ['szWebp','szGif'].forEach(id=>{ const el=$(id); if(el.querySelector('.v').textContent!=='—'){ el.classList.add('busy'); el.querySelector('.d').textContent='需要重新制作'; } }); }
+let busyMake=false;
+$('makeBtn').onclick=()=>{
+  if(active().length<2) return;
+  madeVer=framesVer; cache={key:null};
+  updateUI(); renderPreview(); scheduleEstimate(0);
+};
+
+/* ============================== 尺寸与渲染 ============================== */
+function outSize(extra=1){
+  const f=active()[0]; if(!f) return null;
+  let w = S.scale==='custom'? S.customW : f.w*(+S.scale);
+  w=Math.max(16,Math.round(w*extra));
+  return {w, h:Math.max(16,Math.round(w*f.h/f.w))};
+}
+function renderFrame(f,W,H){
+  const c=document.createElement('canvas'); c.width=W; c.height=H;
+  const x=c.getContext('2d',{willReadFrequently:true});
+  x.imageSmoothingEnabled=true; x.imageSmoothingQuality='high';
+  if(S.bg==='color'&&S.fit==='contain'){ x.fillStyle=S.bgColor; x.fillRect(0,0,W,H); }
+  if(S.fit==='stretch') x.drawImage(f.img,0,0,W,H);
+  else{ const s=S.fit==='cover'?Math.max(W/f.w,H/f.h):Math.min(W/f.w,H/f.h); const dw=f.w*s, dh=f.h*s; x.drawImage(f.img,(W-dw)/2,(H-dh)/2,dw,dh); }
+  return c;
+}
+function renderAll(W,H){ return active().map(f=>({canvas:renderFrame(f,W,H),delay:f.delay})); }
+
+/* ============================== 预览 ============================== */
+let pvTimer=null;
+function renderPreview(){
+  clearTimeout(pvTimer);
+  const sz=outSize(); if(!sz) return;
+  $('emptyTip').classList.add('hidden'); $('pv').classList.remove('hidden'); $('staleCover').classList.add('hidden');
+  // 预览用小尺寸渲染，几十张也很快
+  const ps=Math.min(1, 400/Math.max(sz.w,sz.h));
+  const pw=Math.max(1,Math.round(sz.w*ps)), ph=Math.max(1,Math.round(sz.h*ps));
+  const fr=active().map(f=>{ const c=renderFrame(f,sz.w,sz.h); if(ps===1) return {c,d:f.delay}; const s=document.createElement('canvas'); s.width=pw; s.height=ph; const sx=s.getContext('2d'); sx.imageSmoothingQuality='high'; sx.drawImage(c,0,0,pw,ph); return {c:s,d:f.delay}; });
+  const pv=$('pv'); pv.width=pw; pv.height=ph; const ctx=pv.getContext('2d');
+  const total=fr.reduce((a,f)=>a+f.d,0);
+  $('pvInfo').textContent=`${fr.length} 帧 · 一轮 ${(total/1000).toFixed(2)} 秒 · ${S.loop==='inf'?'无限循环':'播放 '+S.loopN+' 次'}`;
+  let i=0; const step=()=>{ ctx.clearRect(0,0,pw,ph); ctx.drawImage(fr[i].c,0,0); pvTimer=setTimeout(()=>{ i=(i+1)%fr.length; step(); },fr[i].d); };
+  step();
+}
+
+/* ============================== 实时体积 ============================== */
+let estToken=0, estTimer=null, cache={key:null};
+const CANCEL=new Error('cancel');
+function settingsKey(){ return JSON.stringify([framesVer,active().map(f=>f.id+':'+f.delay),S.loop,S.loopN,S.scale,S.customW,S.fit,S.bg,S.bgColor,S.target,S.targetKB,S.webpQ,S.gifColors,S.dither]); }
+function showSz(id,r,text,sub){
+  const el=$(id); el.classList.remove('busy');
+  if(text!==undefined){ el.querySelector('.v').textContent=text; el.querySelector('.d').textContent=sub||''; return; }
+  el.querySelector('.v').innerHTML=fmtSize(r.blob.size)+(S.target==='on'?(r.hit?'<span class="tag ok">达标</span>':'<span class="tag warn">超出</span>'):'');
+  el.querySelector('.d').textContent=`${r.sz.w} × ${r.sz.h} · ${r.note}`;
+}
+function busySz(id,t){ const el=$(id); el.classList.add('busy'); el.querySelector('.d').textContent=t; }
+function scheduleEstimate(delay=400){
+  clearTimeout(estTimer); estToken++;
+  if(!ready()) return;
+  if(cache.key===settingsKey()) return;
+  busySz('szWebp','计算中…'); busySz('szGif','等待中…');
+  estTimer=setTimeout(estimate,delay);
+}
+async function estimate(){
+  const my=++estToken, key=settingsKey();
+  const check=()=>{ if(my!==estToken) throw CANCEL; };
+  const c={key};
+  try{
+    if(WEBP_OK){ busySz('szWebp','计算中…'); c.WebP=await makeWebP({check, say:t=>busySz('szWebp',t)}); check(); showSz('szWebp',c.WebP); }
+    else showSz('szWebp',null,'不支持','请用 Chrome 打开');
+    await tick(); check();
+    c.GIF=await makeGIF({check, say:t=>busySz('szGif',t)}); check(); showSz('szGif',c.GIF);
+    cache=c;
+  }catch(e){ if(e!==CANCEL){ console.error(e); setStatus('计算失败：'+e.message,true); } }
+}
+
+/* ============================== GIF 编码器 ============================== */
+function buildPalette(datas,maxColors){
+  const exact=new Map();
+  outer: for(const d of datas){ for(let i=0;i<d.length;i+=4){ if(d[i+3]<128) continue; exact.set((d[i]<<16)|(d[i+1]<<8)|d[i+2],1); if(exact.size>maxColors) break outer; } }
+  if(exact.size<=maxColors) return [...exact.keys()].map(k=>[(k>>16)&255,(k>>8)&255,k&255]);
+  let count=0; for(const d of datas) count+=d.length/4;
+  const stride=Math.max(1,Math.floor(count/250000));
+  const px=[]; let idx=0;
+  for(const d of datas){ for(let i=0;i<d.length;i+=4,idx++){ if(idx%stride) continue; if(d[i+3]<128) continue; px.push(d[i],d[i+1],d[i+2]); } }
+  const n=px.length/3; if(!n) return [[0,0,0]];
+  const ids=new Uint32Array(n); for(let i=0;i<n;i++) ids[i]=i;
+  const range=b=>{ const mn=[255,255,255],mx=[0,0,0]; for(let i=b.s;i<b.e;i++){ const p=ids[i]*3; for(let c=0;c<3;c++){ const v=px[p+c]; if(v<mn[c])mn[c]=v; if(v>mx[c])mx[c]=v; } } const r=[mx[0]-mn[0],mx[1]-mn[1],mx[2]-mn[2]]; const ch=r[0]>=r[1]&&r[0]>=r[2]?0:(r[1]>=r[2]?1:2); return {ch,r:r[ch]}; };
+  let boxes=[{s:0,e:n}]; boxes.forEach(b=>Object.assign(b,range(b)));
+  while(boxes.length<maxColors){
+    let best=-1,score=-1;
+    for(let i=0;i<boxes.length;i++){ const b=boxes[i]; if(b.e-b.s<2) continue; const sc=b.r*Math.sqrt(b.e-b.s); if(sc>score){score=sc;best=i;} }
+    if(best<0||score<=0) break;
+    const b=boxes[best], ch=b.ch;
+    const sub=Array.from(ids.subarray(b.s,b.e)).sort((a,c)=>px[a*3+ch]-px[c*3+ch]); ids.set(sub,b.s);
+    const mid=b.s+((b.e-b.s)>>1); const b1={s:b.s,e:mid}, b2={s:mid,e:b.e};
+    Object.assign(b1,range(b1)); Object.assign(b2,range(b2)); boxes.splice(best,1,b1,b2);
+  }
+  let pal=boxes.map(b=>{ let r=0,g=0,bl=0; for(let i=b.s;i<b.e;i++){ const p=ids[i]*3; r+=px[p]; g+=px[p+1]; bl+=px[p+2]; } const c=b.e-b.s; return [Math.round(r/c),Math.round(g/c),Math.round(bl/c)]; });
+  for(let it=0;it<2;it++){
+    const acc=pal.map(()=>[0,0,0,0]); const mp=makeMapper(pal);
+    for(let i=0;i<n;i+=2){ const p=i*3; const j=mp(px[p],px[p+1],px[p+2]); const a=acc[j]; a[0]+=px[p];a[1]+=px[p+1];a[2]+=px[p+2];a[3]++; }
+    pal=pal.map((c,j)=>acc[j][3]?[Math.round(acc[j][0]/acc[j][3]),Math.round(acc[j][1]/acc[j][3]),Math.round(acc[j][2]/acc[j][3])]:c);
+  }
+  return pal;
+}
+function nearest(pal,r,g,b){ let bi=0,bd=1e9; for(let i=0;i<pal.length;i++){ const c=pal[i]; const dr=c[0]-r,dg=c[1]-g,db=c[2]-b; const d=dr*dr*2+dg*dg*4+db*db*3; if(d<bd){bd=d;bi=i;} } return bi; }
+function makeMapper(pal){
+  const cache=new Int16Array(1<<18).fill(-1);
+  const m=(r,g,b)=>{ const k=((r>>2)<<12)|((g>>2)<<6)|(b>>2); let v=cache[k]; if(v<0){ v=nearest(pal,r,g,b); cache[k]=v; } return v; };
+  m.pal=pal; return m;
+}
+function clamp8(v){ return v<0?0:v>255?255:v|0; }
+function indexFrame(d,W,H,mapper,transIdx,dither){
+  const out=new Uint8Array(W*H);
+  if(!dither){ for(let i=0,p=0;i<out.length;i++,p+=4) out[i]=(transIdx>=0&&d[p+3]<128)?transIdx:mapper(d[p],d[p+1],d[p+2]); return out; }
+  const pal=mapper.pal, err=new Float32Array((W+2)*2*3); let cur=0,nxt=1;
+  for(let y=0;y<H;y++){
+    err.fill(0,nxt*(W+2)*3,(nxt+1)*(W+2)*3);
+    for(let x=0;x<W;x++){
+      const i=y*W+x, p=i*4;
+      if(transIdx>=0&&d[p+3]<128){ out[i]=transIdx; continue; }
+      const e=(cur*(W+2)+x+1)*3;
+      const r=clamp8(d[p]+err[e]), g=clamp8(d[p+1]+err[e+1]), b=clamp8(d[p+2]+err[e+2]);
+      const j=mapper(r,g,b); out[i]=j; const c=pal[j];
+      const er=(r-c[0])*.75, eg=(g-c[1])*.75, eb=(b-c[2])*.75;
+      let q=(cur*(W+2)+x+2)*3; err[q]+=er*7/16; err[q+1]+=eg*7/16; err[q+2]+=eb*7/16;
+      q=(nxt*(W+2)+x)*3;   err[q]+=er*3/16; err[q+1]+=eg*3/16; err[q+2]+=eb*3/16;
+      q=(nxt*(W+2)+x+1)*3; err[q]+=er*5/16; err[q+1]+=eg*5/16; err[q+2]+=eb*5/16;
+      q=(nxt*(W+2)+x+2)*3; err[q]+=er/16;   err[q+1]+=eg/16;   err[q+2]+=eb/16;
+    }
+    [cur,nxt]=[nxt,cur];
+  }
+  return out;
+}
+function lzw(indices,minCode){
+  const out=[]; let cur=0,bits=0;
+  const clear=1<<minCode, eoi=clear+1; let size=minCode+1, next=eoi+1;
+  const dict=new Map();
+  const emit=c=>{ cur|=c<<bits; bits+=size; while(bits>=8){ out.push(cur&255); cur>>>=8; bits-=8; } };
+  emit(clear);
+  let prefix=indices[0];
+  for(let i=1;i<indices.length;i++){
+    const k=indices[i], key=prefix*4096+k, hit=dict.get(key);
+    if(hit!==undefined){ prefix=hit; continue; }
+    emit(prefix);
+    if(next<4096){ dict.set(key,next++); if(next>(1<<size)&&size<12) size++; }
+    else { emit(clear); dict.clear(); size=minCode+1; next=eoi+1; }
+    prefix=k;
+  }
+  emit(prefix); emit(eoi); if(bits>0) out.push(cur&255);
+  return out;
+}
+async function encodeGIF(frames,W,H,opts){
+  const datas=frames.map(f=>f.canvas.getContext('2d').getImageData(0,0,W,H).data);
+  let hasAlpha=false; for(const d of datas){ for(let i=3;i<d.length;i+=4) if(d[i]<128){hasAlpha=true;break;} if(hasAlpha)break; }
+  const pal=buildPalette(datas,Math.max(2,Math.min(256,opts.colors)-(hasAlpha?1:0)));
+  const mapper=makeMapper(pal), transIdx=hasAlpha?pal.length:-1;
+  const n=pal.length+(hasAlpha?1:0); let bitsPer=1; while((1<<bitsPer)<n) bitsPer++;
+  const parts=[]; let bytes=[];
+  const w16=v=>bytes.push(v&255,(v>>8)&255), str=s=>{ for(const ch of s) bytes.push(ch.charCodeAt(0)); };
+  str('GIF89a'); w16(W); w16(H); bytes.push(0x80|((bitsPer-1)<<4)|(bitsPer-1),0,0);
+  for(let i=0;i<(1<<bitsPer);i++){ const c=pal[i]||[0,0,0]; bytes.push(c[0],c[1],c[2]); }
+  if(opts.loop===0||opts.loop>1){ bytes.push(0x21,0xFF,0x0B); str('NETSCAPE2.0'); bytes.push(3,1); w16(opts.loop===0?0:Math.min(65535,opts.loop-1)); bytes.push(0); }
+  const minCode=Math.max(2,bitsPer);
+  for(let fi=0;fi<frames.length;fi++){
+    opts.check&&opts.check();
+    opts.progress&&opts.progress(fi+1,frames.length);
+    await tick();
+    const f=frames[fi];
+    bytes.push(0x21,0xF9,4,((hasAlpha?2:1)<<2)|(hasAlpha?1:0)); w16(Math.max(2,Math.round(f.delay/10))); bytes.push(hasAlpha?transIdx:0,0);
+    bytes.push(0x2C); w16(0); w16(0); w16(W); w16(H); bytes.push(0);
+    const data=lzw(indexFrame(datas[fi],W,H,mapper,transIdx,opts.dither),minCode);
+    bytes.push(minCode);
+    parts.push(new Uint8Array(bytes)); bytes=[];
+    const blk=new Uint8Array(data.length+Math.ceil(data.length/255)+1); let o=0;
+    for(let i=0;i<data.length;i+=255){ const L=Math.min(255,data.length-i); blk[o++]=L; for(let j=0;j<L;j++) blk[o++]=data[i+j]; }
+    blk[o++]=0; parts.push(blk.subarray(0,o));
+  }
+  parts.push(new Uint8Array([0x3B]));
+  return new Blob(parts,{type:'image/gif'});
+}
+
+/* ============================== WebP 编码器（动态） ============================== */
+function canvasToBlob(c,type,q){ return new Promise(r=>c.toBlob(r,type,q)); }
+function readChunks(buf){
+  const v=new DataView(buf), tag=o=>String.fromCharCode(v.getUint8(o),v.getUint8(o+1),v.getUint8(o+2),v.getUint8(o+3));
+  if(tag(0)!=='RIFF'||tag(8)!=='WEBP') throw new Error('不是 WebP');
+  const list=[]; let o=12;
+  while(o+8<=buf.byteLength){ const t=tag(o), sz=v.getUint32(o+4,true); list.push({t,data:new Uint8Array(buf,o+8,sz)}); o+=8+sz+(sz&1); }
+  return list;
+}
+function frameHasAlpha(c){ const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data; for(let i=3;i<d.length;i+=4) if(d[i]<255) return true; return false; }
+async function encodeWebP(frames,W,H,opts){
+  const parts=[]; let anyAlpha=false;
+  for(let fi=0;fi<frames.length;fi++){
+    opts.check&&opts.check(); opts.progress&&opts.progress(fi+1,frames.length);
+    const f=frames[fi];
+    const blob=await canvasToBlob(f.canvas,'image/webp',opts.quality);
+    if(!blob||blob.type!=='image/webp') throw new Error('浏览器不支持 WebP 编码');
+    const ch=readChunks(await blob.arrayBuffer());
+    const keep=ch.filter(c=>c.t==='ALPH'||c.t==='VP8 '||c.t==='VP8L');
+    if(!anyAlpha && keep.some(c=>c.t==='ALPH'||c.t==='VP8L')) anyAlpha=frameHasAlpha(f.canvas);
+    parts.push({keep,delay:f.delay});
+  }
+  const chunks=[];
+  const le=(v,n)=>{ const a=new Uint8Array(n); for(let i=0;i<n;i++) a[i]=(v>>>(8*i))&255; return a; };
+  const asc=s=>Uint8Array.from(s,ch=>ch.charCodeAt(0));
+  const chunk=(t,body)=>{ const pad=body.length&1; const a=new Uint8Array(8+body.length+pad); a.set(asc(t),0); a.set(le(body.length,4),4); a.set(body,8); return a; };
+  const cat=arrs=>{ let n=0; for(const a of arrs) n+=a.length; const o=new Uint8Array(n); let p=0; for(const a of arrs){ o.set(a,p); p+=a.length; } return o; };
+  chunks.push(chunk('VP8X',cat([new Uint8Array([0x02|(anyAlpha?0x10:0),0,0,0]),le(W-1,3),le(H-1,3)])));
+  chunks.push(chunk('ANIM',cat([new Uint8Array([0,0,0,0]),le(opts.loop,2)])));
+  for(const p of parts){
+    const head=cat([le(0,3),le(0,3),le(W-1,3),le(H-1,3),le(Math.min(0xFFFFFF,p.delay),3),new Uint8Array([0x02])]);
+    chunks.push(chunk('ANMF',cat([head,...p.keep.map(c=>chunk(c.t,c.data))])));
+  }
+  const body=cat(chunks);
+  return new Blob([asc('RIFF'),le(body.length+4,4),asc('WEBP'),body],{type:'image/webp'});
+}
+
+/* ============================== 生成（含目标体积） ============================== */
+const tick=()=>new Promise(r=>setTimeout(r,0));
+function loopVal(){ return S.loop==='inf'?0:S.loopN; }
+async function makeWebP({check,say}={}){
+  say=say||setStatus; const loop=loopVal();
+  const prog=(a,b)=>say(`计算中… ${a}/${b}`);
+  if(S.target!=='on'){ const sz=outSize(); return {blob:await encodeWebP(renderAll(sz.w,sz.h),sz.w,sz.h,{quality:S.webpQ/100,loop,check,progress:prog}),sz,note:`画质 ${S.webpQ}`}; }
+  const limit=S.targetKB*1024; let scale=1, best=null;
+  for(let round=0;round<12;round++){
+    const sz=outSize(scale); const fr=renderAll(sz.w,sz.h);
+    const enc=q=>encodeWebP(fr,sz.w,sz.h,{quality:q/100,loop,check,progress:(a,b)=>say(`压缩中… ${sz.w}×${sz.h} 画质 ${q}`)});
+    let lo=30, hi=95, found=null;
+    const top=await enc(hi);
+    if(top.size<=limit) found={blob:top,q:hi};
+    else{
+      const bottom=await enc(lo);
+      if(bottom.size<=limit){ found={blob:bottom,q:lo}; while(hi-lo>3){ const mid=Math.round((lo+hi)/2); const b=await enc(mid); if(b.size<=limit){ lo=mid; found={blob:b,q:mid}; } else hi=mid; } }
+      else best={blob:bottom,sz};
+    }
+    if(found) return {blob:found.blob,sz,note:`画质 ${found.q}${scale<1?' · 已缩小尺寸':''}`,hit:true};
+    scale*=0.85; if(outSize(scale).w<32) break;
+  }
+  return {blob:best.blob,sz:best.sz,note:'已压到最低仍超出目标',hit:false};
+}
+async function makeGIF({check,say}={}){
+  say=say||setStatus; const loop=loopVal();
+  if(S.target!=='on'){ const sz=outSize(); return {blob:await encodeGIF(renderAll(sz.w,sz.h),sz.w,sz.h,{colors:S.gifColors,dither:S.dither,loop,check,progress:(a,b)=>say(`计算中… ${a}/${b}`)}),sz,note:`${S.gifColors} 色${S.dither?' · 抖动':''}`}; }
+  const limit=S.targetKB*1024; let scale=1, last=null;
+  for(let round=0;round<14;round++){
+    const sz=outSize(scale); const fr=renderAll(sz.w,sz.h);
+    for(const colors of [256,128,64]){
+      const blob=await encodeGIF(fr,sz.w,sz.h,{colors,dither:colors>=128,loop,check,progress:(a,b)=>say(`压缩中… ${sz.w}×${sz.h} · ${colors} 色 ${a}/${b}`)});
+      last={blob,sz};
+      if(blob.size<=limit) return {blob,sz,note:`${colors} 色${scale<1?' · 已缩小尺寸':''}`,hit:true};
+    }
+    scale*=0.85; if(outSize(scale).w<32) break;
+  }
+  return {blob:last.blob,sz:last.sz,note:'已压到最低仍超出目标',hit:false};
+}
+
+/* ============================== 导出 ============================== */
+function fmtSize(n){ return n>=1048576?(n/1048576).toFixed(2)+' MB':Math.max(1,Math.round(n/1024))+' KB'; }
+function stamp(){ const d=new Date(),p=v=>String(v).padStart(2,'0'); return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
+function baseName(){ return (active()[0]?.name||'动图').replace(/\.[^.]+$/,'').slice(0,40); }
+function setStatus(t,warn){ $('status').textContent=t; $('status').style.color=warn?'var(--warn)':''; }
+function download(kind,r){
+  const url=URL.createObjectURL(r.blob), fname=`${baseName()}-${stamp()}.${kind==='GIF'?'gif':'webp'}`;
+  const a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  return fname;
+}
+async function run(kinds){
+  if(!ready()) return;
+  const btns=['exWebp','exGif','exBoth','makeBtn']; btns.forEach(id=>$(id).disabled=true);
+  const done=[];
+  try{
+    for(const k of kinds){
+      let r=(cache.key===settingsKey()&&cache[k])||null;
+      if(!r){ r= k==='GIF'? await makeGIF({say:t=>setStatus('GIF '+t)}) : await makeWebP({say:t=>setStatus('WebP '+t)}); }
+      done.push(`${download(k,r)}（${fmtSize(r.blob.size)}）`);
+    }
+    setStatus('已下载到「下载」文件夹：'+done.join('、'));
+  }catch(e){ console.error(e); setStatus('导出失败：'+e.message,true); }
+  finally{ updateUI(); }
+}
+$('exGif').onclick=()=>run(['GIF']);
+$('exWebp').onclick=()=>run(['WebP']);
+$('exBoth').onclick=()=>run(['WebP','GIF']);
+
+/* ============================== 启动 ============================== */
+store.load(); initControls(); renderGrid(); updateUI();
+(async function(){
+  const items = await Site.take(); if(!items||!items.length) return;
+  setView('make'); await addFiles(Site.toFiles(items)); Site.toast('已接收 '+items.length+' 张图片');
+})();
+</script>
+<script src="split.js"></script>
+</body>
+</html>

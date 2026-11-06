@@ -1,0 +1,10 @@
+// Cloudflare 部署配置：这是一个纯静态网站，public 文件夹里的文件原样发布。
+{
+  "name": "tupiantools",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./public",
+    // /compress/ 自动对应 compress/index.html
+    "html_handling": "auto-trailing-slash"
+  }
+}
