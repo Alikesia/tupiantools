@@ -328,7 +328,7 @@ async function loadImage(file){
 async function addFiles(files){
   const imgs=files.filter(f=>f.type.startsWith('image/'));
   if(files.length && !imgs.length){ setStatus('只能添加图片文件（JPG / PNG / WebP / GIF 等）',true); return; }
-  imgs.sort((a,b)=>a.name.localeCompare(b.name,'zh-CN',{numeric:true,sensitivity:'base'})); // 同一批按文件名自然顺序
+  // 保持导入顺序（不再按文件名重排）；需要按名字排可用工具栏「排序…」
   let n=0;
   for(const file of imgs){
     setStatus(`正在读取图片 ${++n}/${imgs.length}…`);
