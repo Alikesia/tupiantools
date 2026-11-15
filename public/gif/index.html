@@ -57,6 +57,7 @@ header p{margin:0;color:var(--muted);font-size:13px}
 .tile.skip .thumb,.tile.skip .name{opacity:.35}
 .tile.dragging{opacity:.35}
 .tile.dropbefore{box-shadow:-3px 0 0 0 var(--accent)}
+.tile.dropafter{box-shadow:3px 0 0 0 var(--accent)}
 .tile .thumb{height:64px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:repeating-conic-gradient(var(--chk1) 0 25%,var(--chk2) 0 50%) 0 0/10px 10px}
 .tile .thumb img{max-width:100%;max-height:100%;display:block;pointer-events:none}
 .tile .chk{position:absolute;top:4px;left:4px;width:16px;height:16px;border-radius:4px;border:1.5px solid #fff;background:rgba(0,0,0,.35);box-shadow:0 0 0 1px rgba(0,0,0,.2)}
@@ -203,7 +204,7 @@ input[type=color]{width:34px;height:28px;border:1px solid var(--line);border-rad
     </select>
     <button class="tb danger" id="tbClear" style="margin-left:auto">清空</button>
   </div>
-  <div class="counts"><span id="counts">还没有图片</span><span>点击选中 · ⇧Shift 连选 · 拖动调整顺序 · 可 ⌘V 粘贴</span></div>
+  <div class="counts"><span id="counts">还没有图片</span><span>点击选中 · ⇧Shift 连选 · 拖动调整顺序（选中多张可一起拖）· 可 ⌘V 粘贴</span></div>
   <div class="grid" id="grid"></div>
   <input type="file" id="picker" accept="image/*" multiple hidden>
 </div>
@@ -322,7 +323,7 @@ async function loadImage(file){
   const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(img.naturalWidth*s)); c.height=Math.max(1,Math.round(img.naturalHeight*s));
   c.getContext('2d').drawImage(img,0,0,c.width,c.height);
   const thumb=URL.createObjectURL(await new Promise(r=>c.toBlob(r,'image/png')));
-  return {id:++fid, img, thumb, name:file.name||'粘贴的图片', w:img.naturalWidth, h:img.naturalHeight, delay:clampDelay(S.delayAll), skip:false};
+  return {id:++fid, img, thumb, blob:file, name:file.name||'粘贴的图片', w:img.naturalWidth, h:img.naturalHeight, delay:clampDelay(S.delayAll), skip:false};
 }
 async function addFiles(files){
   const imgs=files.filter(f=>f.type.startsWith('image/'));
@@ -377,15 +378,20 @@ function renderGrid(){
       renderGrid();
     };
     const inp=t.querySelector('input');
-    inp.onchange=()=>{ f.delay=clampDelay(+inp.value); inp.value=f.delay; settingsChanged(); };
+    inp.onchange=()=>{ f.delay=clampDelay(+inp.value); inp.value=f.delay; settingsChanged(); persistSoon(); };
     t.querySelector('.sk').onclick=()=>{ f.skip=!f.skip; framesChanged(); };
     t.querySelector('.cp').onclick=()=>{ S.frames.splice(i+1,0,{...f,id:++fid}); framesChanged(); };
     t.querySelector('.del').onclick=()=>{ S.frames.splice(i,1); sel.delete(f.id); framesChanged(); };
     t.ondragstart=e=>{ if(e.target.closest('input')){ e.preventDefault(); return; } dragFrom=i; t.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain','tile'); };
-    t.ondragend=()=>{ dragFrom=-1; t.classList.remove('dragging'); g.querySelectorAll('.dropbefore').forEach(x=>x.classList.remove('dropbefore')); };
-    t.ondragover=e=>{ if(dragFrom<0) return; e.preventDefault(); g.querySelectorAll('.dropbefore').forEach(x=>x.classList.remove('dropbefore')); if(dragFrom!==i) t.classList.add('dropbefore'); };
-    t.ondrop=e=>{ if(dragFrom<0) return; e.preventDefault(); e.stopPropagation(); const from=dragFrom; dragFrom=-1; if(from===i) return;
-      const [m]=S.frames.splice(from,1); S.frames.splice(from<i?i-1:i,0,m); lastClick=-1; renderGrid(); settingsChanged(); };
+    t.ondragend=()=>{ dragFrom=-1; t.classList.remove('dragging'); clearDropMarks(); };
+    t.ondragover=e=>{ if(dragFrom<0) return; e.preventDefault(); clearDropMarks();
+      if(dragFrom===i) return;
+      const after=e.clientX > t.getBoundingClientRect().left + t.offsetWidth/2;
+      t.classList.add(after?'dropafter':'dropbefore'); };
+    t.ondrop=e=>{ if(dragFrom<0) return; e.preventDefault(); e.stopPropagation();
+      const from=dragFrom; dragFrom=-1; clearDropMarks();
+      const after=e.clientX > t.getBoundingClientRect().left + t.offsetWidth/2;
+      moveFrames(from, i+(after?1:0)); };
     g.appendChild(t);
   });
   g.scrollTop=keepScroll;
@@ -398,19 +404,40 @@ function renderGrid(){
   $('tbSkip').textContent = allSkipped? '启用' : '跳过';
   $('tbDelay').textContent = s? '应用到所选' : '应用到全部';
 }
+function clearDropMarks(){ $('grid').querySelectorAll('.dropbefore,.dropafter').forEach(x=>x.classList.remove('dropbefore','dropafter')); }
+function moveFrames(from, insertIdx){
+  const anchor=S.frames[from]; if(!anchor) return;
+  // 被拖的那张若在选中集合里，则所有选中的一起移动（保持相对顺序）
+  const ids=(sel.has(anchor.id)&&sel.size>1)? new Set(S.frames.filter(f=>sel.has(f.id)).map(f=>f.id)) : new Set([anchor.id]);
+  let idx=0; for(let k=0;k<insertIdx;k++) if(!ids.has(S.frames[k].id)) idx++;
+  const moving=S.frames.filter(f=>ids.has(f.id));
+  const rest=S.frames.filter(f=>!ids.has(f.id));
+  rest.splice(idx,0,...moving);
+  const changed=rest.some((f,k)=>f!==S.frames[k]);
+  S.frames=rest;
+  if(!changed){ renderGrid(); return; }
+  lastClick=-1; renderGrid(); settingsChanged(); persistSoon();
+}
+(function(){
+  const g=$('grid');
+  g.addEventListener('dragover',e=>{ if(dragFrom<0||e.target!==g) return; e.preventDefault(); clearDropMarks();
+    const tiles=g.querySelectorAll('.tile'); if(tiles.length) tiles[tiles.length-1].classList.add('dropafter'); });
+  g.addEventListener('drop',e=>{ if(dragFrom<0||e.target!==g) return; e.preventDefault(); e.stopPropagation();
+    const from=dragFrom; dragFrom=-1; clearDropMarks(); moveFrames(from,S.frames.length); });
+})();
 const selected=()=>S.frames.filter(f=>sel.has(f.id));
 $('tbAll').onclick=()=>{ S.frames.forEach(f=>sel.add(f.id)); renderGrid(); };
 $('tbNone').onclick=()=>{ sel.clear(); lastClick=-1; renderGrid(); };
 $('tbDel').onclick=()=>{ S.frames=S.frames.filter(f=>!sel.has(f.id)); sel.clear(); lastClick=-1; framesChanged(); };
 $('tbCopy').onclick=()=>{ const out=[]; for(const f of S.frames){ out.push(f); if(sel.has(f.id)) out.push({...f,id:++fid}); } S.frames=out; framesChanged(); };
 $('tbSkip').onclick=()=>{ const sk=$('tbSkip').textContent==='跳过'; selected().forEach(f=>f.skip=sk); framesChanged(); };
-$('tbDelay').onclick=()=>{ S.delayAll=clampDelay(+$('delayAll').value); $('delayAll').value=S.delayAll; store.save(); (sel.size?selected():S.frames).forEach(f=>f.delay=S.delayAll); renderGrid(); settingsChanged(); };
+$('tbDelay').onclick=()=>{ S.delayAll=clampDelay(+$('delayAll').value); $('delayAll').value=S.delayAll; store.save(); (sel.size?selected():S.frames).forEach(f=>f.delay=S.delayAll); renderGrid(); settingsChanged(); persistSoon(); };
 $('delayAll').onchange=()=>{ S.delayAll=clampDelay(+$('delayAll').value); $('delayAll').value=S.delayAll; store.save(); };
 $('tbSort').onchange=()=>{
   const v=$('tbSort').value; $('tbSort').value='';
   const cmp=(a,b)=>a.name.localeCompare(b.name,'zh-CN',{numeric:true,sensitivity:'base'});
   if(v==='az') S.frames.sort(cmp); else if(v==='za') S.frames.sort((a,b)=>cmp(b,a)); else if(v==='rev') S.frames.reverse(); else return;
-  lastClick=-1; renderGrid(); settingsChanged();
+  lastClick=-1; renderGrid(); settingsChanged(); persistSoon();
 };
 $('tbClear').onclick=()=>{ if(!confirmClear()) return; S.frames=[]; sel.clear(); lastClick=-1; framesChanged(); };
 let clearArmed=0;
@@ -449,7 +476,7 @@ function initControls(){
 }
 
 /* ============================== 流程：图片增减 / 设置变化 / 制作 ============================== */
-function framesChanged(){ framesVer++; renderGrid(); updateUI(); }
+function framesChanged(){ framesVer++; renderGrid(); updateUI(); persistSoon(); }
 function settingsChanged(){ updateUI(); if(ready()){ renderPreview(); scheduleEstimate(); } }
 function updateUI(){
   const n=active().length, sz=outSize();
@@ -756,9 +783,61 @@ $('exGif').onclick=()=>run(['GIF']);
 $('exWebp').onclick=()=>run(['WebP']);
 $('exBoth').onclick=()=>run(['WebP','GIF']);
 
+/* ============================== 图片暂存：只在本标签页内切换工具时保留；刷新、新开都回到初始状态 ============================== */
+const SS_KEY='gifTool.framesLive';
+function shouldRestore(){
+  let type='navigate'; try{ type=performance.getEntriesByType('navigation')[0]?.type||'navigate'; }catch(e){}
+  let live=false; try{ live=sessionStorage.getItem(SS_KEY)==='1'; }catch(e){}
+  return live && type!=='reload';
+}
+const FDB={ open(){ return new Promise((res,rej)=>{ const r=indexedDB.open('imgtools.gifFrames',1);
+  r.onupgradeneeded=()=>r.result.createObjectStore('frames',{keyPath:'pos'});
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); } };
+let persistTimer=null, persistBusy=false, persistAgain=false;
+function persistSoon(){ clearTimeout(persistTimer); persistTimer=setTimeout(persistNow,600); }
+async function persistNow(){
+  if(persistBusy){ persistAgain=true; return; }
+  persistBusy=true;
+  try{
+    const rows=S.frames.filter(f=>f.blob).map((f,i)=>({pos:i, blob:f.blob, name:f.name, delay:f.delay, skip:!!f.skip}));
+    const d=await FDB.open();
+    await new Promise((res,rej)=>{ const tx=d.transaction('frames','readwrite'), st=tx.objectStore('frames');
+      st.clear(); rows.forEach(r=>st.put(r)); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); });
+    d.close();
+    try{ rows.length? sessionStorage.setItem(SS_KEY,'1') : sessionStorage.removeItem(SS_KEY); }catch(e){}
+  }catch(e){ console.warn('保存图片失败：', e); }
+  persistBusy=false;
+  if(persistAgain){ persistAgain=false; persistSoon(); }
+}
+async function clearSaved(){
+  try{ sessionStorage.removeItem(SS_KEY); }catch(e){}
+  try{ const d=await FDB.open(); await new Promise(res=>{ const tx=d.transaction('frames','readwrite'); tx.objectStore('frames').clear(); tx.oncomplete=res; tx.onerror=res; }); d.close(); }catch(e){}
+}
+async function restoreFrames(){
+  if(!shouldRestore()){ await clearSaved(); return 0; }
+  try{
+    const d=await FDB.open();
+    const rows=await new Promise((res,rej)=>{ const g=d.transaction('frames').objectStore('frames').getAll();
+      g.onsuccess=()=>res(g.result||[]); g.onerror=()=>rej(g.error); });
+    d.close();
+    if(!rows.length) return 0;
+    rows.sort((a,b)=>a.pos-b.pos);
+    let n=0;
+    for(const r of rows){
+      if(!(r.blob instanceof Blob)) continue;
+      setStatus(`正在恢复上次的图片 ${n+1}/${rows.length}…`);
+      try{ const fr=await loadImage(new File([r.blob], r.name||'图片', {type:r.blob.type||'image/png'}));
+        fr.delay=clampDelay(r.delay); fr.skip=!!r.skip; S.frames.push(fr); n++; }catch(e){}
+    }
+    return n;
+  }catch(e){ console.warn('恢复图片失败：', e); return 0; }
+}
+
 /* ============================== 启动 ============================== */
 store.load(); initControls(); renderGrid(); updateUI();
 (async function(){
+  const n=await restoreFrames();
+  if(n){ framesVer++; renderGrid(); updateUI(); setStatus(''); }
   const items = await Site.take(); if(!items||!items.length) return;
   setView('make'); await addFiles(Site.toFiles(items)); Site.toast('已接收 '+items.length+' 张图片');
 })();
