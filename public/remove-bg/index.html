@@ -71,9 +71,9 @@ select{background:var(--bg);color:var(--text);border:1px solid var(--line);borde
 .bgs{display:inline-flex;gap:4px}
 .bgs button{width:24px;height:24px;border-radius:6px;border:1px solid var(--line);cursor:pointer;padding:0}
 .bgs button.on{outline:2px solid var(--accent);outline-offset:1px}
-.bgs .b-chk{background:repeating-conic-gradient(#292929 0 25%,#111111 0 50%) 0 0/8px 8px}
+.bgs .b-chk{background:repeating-conic-gradient(var(--chk1) 0 25%,var(--chk2) 0 50%) 0 0/8px 8px}
 .stage{position:relative;border-radius:10px;overflow:auto;min-height:320px;max-height:calc(100vh - 230px);display:flex;align-items:center;justify-content:center;padding:14px}
-.stage.b-chk{background:repeating-conic-gradient(#292929 0 25%,#111111 0 50%) 0 0/16px 16px}
+.stage.b-chk{background:repeating-conic-gradient(var(--chk1) 0 25%,var(--chk2) 0 50%) 0 0/16px 16px}
 .stage canvas{display:block;max-width:100%;max-height:calc(100vh - 260px);image-rendering:auto}
 .stage.zoom canvas{max-width:none;max-height:none}
 .stage.zoom{align-items:flex-start;justify-content:flex-start}
