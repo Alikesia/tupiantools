@@ -47,10 +47,10 @@
     lock:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>'
   };
   var LINKS = [
-    {key:'compress', text:'图片压缩转换', sub:'缩小体积，转 WebP / JPG'},
+    {key:'compress', text:'压缩转换', sub:'缩小体积，转 WebP / JPG'},
     {key:'bg',       text:'消除背景',     sub:'纯色背景变透明'},
-    {key:'gif',      text:'GIF合成',      sub:'多张图片做成 GIF'},
-    {key:'split',    text:'GIF拆解',      sub:'拆成一张张图片'}
+    {key:'gif',      text:'GIF 合成',      sub:'多张图片做成 GIF'},
+    {key:'split',    text:'GIF 拆解',      sub:'拆成一张张图片'}
   ];
   function renderBar(el, active){
     var h = '<div class="brand"><span class="logo">'+ICON.logo+'</span><span class="name">图片工具箱</span></div><nav class="tabs-app" aria-label="工具">';
@@ -88,13 +88,30 @@
       });
       el.addEventListener('pointerover', warmTool);
       el.addEventListener('focusin', warmTool);
+      scheduleWarmup(el);
       try{ if(a) localStorage.setItem('imgtools.last', a); }catch(e){}
     });
   }
   var warmed = {};
   function warmTool(e){
     var link = e.target.closest('.tabs-app a[data-k]');
-    if(LOCAL || !link || link.getAttribute('aria-current') === 'page') return;
+    if(link) prefetchTool(link);
+  }
+  function scheduleWarmup(el){
+    if(LOCAL) return;
+    function afterLoad(){
+      var warm = function(){
+        if(document.hidden) return;
+        el.querySelectorAll('.tabs-app a[data-k]').forEach(prefetchTool);
+      };
+      if(window.requestIdleCallback) window.requestIdleCallback(warm);
+      else setTimeout(warm, 250);
+    }
+    if(document.readyState === 'complete') afterLoad();
+    else window.addEventListener('load', afterLoad, {once:true});
+  }
+  function prefetchTool(link){
+    if(LOCAL || link.getAttribute('aria-current') === 'page') return;
     if(navigator.connection && (navigator.connection.saveData || /(^|-)2g$/.test(navigator.connection.effectiveType))) return;
     var target = new URL(link.href);
     target.hash = '';

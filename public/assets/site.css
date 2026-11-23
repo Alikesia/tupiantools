@@ -65,9 +65,22 @@ html{scrollbar-gutter:stable}
 .themeBtn svg{width:17px;height:17px}
 @media (max-width:1000px){ .appbar .local{display:none} }
 @media (max-width:720px){
-  .appbar{gap:12px}
-  .appbar .brand span.name{display:none}
-  .tabs-app a{padding:0 10px}
+  .appbar{
+    display:grid;grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:"brand side" "tabs tabs";gap:6px 12px;
+    height:auto;padding:8px 0 0;margin-bottom:12px;
+  }
+  .appbar .brand{grid-area:brand}
+  .appbar .side{grid-area:side}
+  .tabs-app{
+    grid-area:tabs;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+    height:auto;overflow:visible;
+  }
+  .tabs-app a{justify-content:center;min-height:44px;height:auto;padding:0 2px;gap:4px;font-size:12px}
+  .tabs-app a svg{width:14px;height:14px}
+}
+@media (max-width:440px){
+  .tabs-app a{flex-direction:column;gap:3px;min-height:50px}
 }
 
 /* 页面之间传图时的提示条 */
