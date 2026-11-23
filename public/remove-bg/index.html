@@ -71,9 +71,9 @@ select{background:var(--bg);color:var(--text);border:1px solid var(--line);borde
 .bgs{display:inline-flex;gap:4px}
 .bgs button{width:24px;height:24px;border-radius:6px;border:1px solid var(--line);cursor:pointer;padding:0}
 .bgs button.on{outline:2px solid var(--accent);outline-offset:1px}
-.bgs .b-chk{background:repeating-conic-gradient(#cfcfcf 0 25%,#fff 0 50%) 0 0/8px 8px}
+.bgs .b-chk{background:repeating-conic-gradient(#292929 0 25%,#111111 0 50%) 0 0/8px 8px}
 .stage{position:relative;border-radius:10px;overflow:auto;min-height:320px;max-height:calc(100vh - 230px);display:flex;align-items:center;justify-content:center;padding:14px}
-.stage.b-chk{background:repeating-conic-gradient(#cfcfcf 0 25%,#fff 0 50%) 0 0/16px 16px}
+.stage.b-chk{background:repeating-conic-gradient(#292929 0 25%,#111111 0 50%) 0 0/16px 16px}
 .stage canvas{display:block;max-width:100%;max-height:calc(100vh - 260px);image-rendering:auto}
 .stage.zoom canvas{max-width:none;max-height:none}
 .stage.zoom{align-items:flex-start;justify-content:flex-start}
@@ -108,14 +108,14 @@ select{background:var(--bg);color:var(--text);border:1px solid var(--line);borde
     <div class="card">
       <h2 style="display:flex;justify-content:space-between;align-items:center">背景 <button class="tb" id="resetP" style="padding:3px 9px;font-size:12px" title="所有设置回到建议值" disabled>恢复建议值</button></h2>
       <div class="row"><span class="lbl">背景色</span>
-        <div class="seg" id="modeSeg"><button data-v="auto" class="on">自动识别</button><button data-v="color">指定颜色</button></div>
+        <div class="seg" id="modeSeg"><button data-v="auto" class="on">自动识别</button><button data-v="color">指定颜色</button><button data-v="glow">去外光晕</button></div>
         <input type="color" id="bgColor" value="#ffffff" class="hidden">
       </div>
       <p class="hint" id="detected">—</p>
       <div class="row"><span class="lbl">容差</span>
         <input type="range" id="tol" min="1" max="100" value="25"><span class="val" id="tolV">25</span>
       </div>
-      <p class="hint">背景没去干净就调大；主体被吃掉就调小。</p>
+      <p class="hint">自动分析背景、闭合边框和已有透明度。背景没去干净就调大；主体被吃掉就调小。「去外光晕」可手动强制使用，毛发和模糊轮廓仍需检查。</p>
       <label class="chk"><input type="checkbox" id="holes" checked><span>去掉内部空洞<small>比如字母「O」中间露出的背景。只去和外面背景几乎一样的小块，框里的浅色画面、高光不会被误删。</small></span></label>
       <label class="chk"><input type="checkbox" id="global"><span>同色区域全部去掉<small>不管连不连着外面，和背景同色的地方都变透明。白底时会连白色高光一起去掉，慎用。</small></span></label>
     </div>
@@ -181,25 +181,110 @@ function sourceData(it){
   const x = c.getContext('2d', {willReadFrequently:true}); x.drawImage(it.img, 0, 0);
   return x.getImageData(0, 0, it.W, it.H);
 }
-// 四条边上最常见的颜色（取中位数），作为背景色
-function borderColor(d, W, H){
-  const r=[], g=[], b=[];
-  const add = i=>{ const o=i*4; if(d[o+3] < 20) return; r.push(d[o]); g.push(d[o+1]); b.push(d[o+2]); };
-  for(let x=0;x<W;x++){ add(x); add((H-1)*W+x); }
-  for(let y=1;y<H-1;y++){ add(y*W); add(y*W+W-1); }
-  if(!r.length) return null;            // 四边都是透明的
-  const med = a=>{ a.sort((p,q)=>p-q); return a[a.length>>1]; };
-  return [med(r), med(g), med(b)];
+// 用真实颜色簇取代逐通道中位数，避免多色边界拼出不存在的背景色。
+function backgroundProfile(d,W,H){
+  const samples=[], bins=new Map(); let transparent=0, borderTotal=0;
+  const add=i=>{const p=i*4; borderTotal++; if(d[p+3]<250) transparent++;
+    if(d[p+3]<250) return;
+    const c=[d[p],d[p+1],d[p+2]], key=c.map(v=>v>>5).join(',');
+    samples.push(c); bins.set(key,(bins.get(key)||0)+1);
+  };
+  for(let x=0;x<W;x++){add(x);if(H>1)add((H-1)*W+x);}
+  for(let y=1;y<H-1;y++){add(y*W);if(W>1)add(y*W+W-1);}
+  if(!samples.length)return {color:[255,255,255],palette:[],spread:0,alphaBorder:transparent/Math.max(1,borderTotal)};
+  const ranked=[...bins].sort((a,b)=>b[1]-a[1]);
+  const distance=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
+  const median=a=>{a.sort((a,b)=>a-b);return a[a.length>>1];};
+  const palette=[];
+  for(const [key,count] of ranked){
+    if(palette.length>=4 || (palette.length && count<samples.length*.08))break;
+    const center=key.split(',').map(v=>Number(v)*32+16);
+    const group=samples.filter(c=>distance(c,center)<48);
+    const color=[0,1,2].map(k=>median(group.map(c=>c[k])));
+    if(!palette.some(c=>distance(c,color)<32))palette.push(color);
+  }
+  const color=palette[0], deviations=samples.map(c=>distance(c,color)).sort((a,b)=>a-b);
+  return {color,palette,spread:deviations[Math.floor(deviations.length*.9)],alphaBorder:transparent/Math.max(1,borderTotal)};
+}
+function borderColor(d,W,H){return backgroundProfile(d,W,H).color;}
+
+// 已有显著透明边界的 PNG，自动模式保留原 alpha，不重复抠掉白毛和发光。
+function existingTransparency(d,W,H,profile){
+  if(profile.alphaBorder<.1)return false;
+  let count=0;for(let i=3;i<d.length;i+=4)if(d[i]<250)count++;
+  return count>=Math.max(1,W*H*.005);
+}
+
+// 自动去光只接受一个占主体地位、远离画布边界的闭合区域。
+// 还要确认外围平缓且比颜色法多删掉明显的渐变；不确定就回退。
+function confidentGlow(d,W,H,candidate,ordinary,profile){
+  const N=W*H; if(profile.spread<32)return false;
+  let kept=0,extra=0,rough=0,pairs=0;
+  const step=Math.max(1,Math.floor(N/30000));
+  for(let i=0;i<N;i++){
+    if(!candidate[i]){kept++;const x=i%W;if(x===0||x===W-1||i<W||i>=N-W)return false;}
+    if(candidate[i]&&!ordinary[i])extra++;
+    if(i%step===0 && candidate[i] && i%W<W-1 && candidate[i+1]){
+      const p=i*4,q=p+4; pairs++;
+      if(Math.hypot(d[p]-d[q],d[p+1]-d[q+1],d[p+2]-d[q+2])>18)rough++;
+    }
+  }
+  if(kept<N*.18||kept>N*.92||extra<N*.025||!pairs||rough/pairs>.04)return false;
+  const seen=new Uint8Array(N),q=new Int32Array(N);let largest=0;
+  for(let s=0;s<N;s++)if(!candidate[s]&&!seen[s]){
+    let head=0,tail=0;q[tail++]=s;seen[s]=1;
+    const add=i=>{if(!candidate[i]&&!seen[i]){seen[i]=1;q[tail++]=i;}};
+    while(head<tail){const i=q[head++],x=i%W;if(x)add(i-1);if(x<W-1)add(i+1);if(i>=W)add(i-W);if(i<N-W)add(i+W);}
+    largest=Math.max(largest,tail);
+  }
+  return largest>=kept*.94;
+}
+
+// 外光晕模式：多尺度颜色梯度形成屏障，再从画布边界填充。
+// 不限制背景的累计色差，所以黑底到黄色光晕的缓慢变化仍可去掉。
+function glowBackground(d, W, H, tolerance){
+  const N=W*H, edge=new Uint8Array(N), bg=new Uint8Array(N);
+  const radius=Math.max(2, Math.min(6, Math.round(Math.min(W,H)/350)));
+  const threshold=16+tolerance*0.45;
+  const delta=(a,b)=>Math.hypot(d[a]-d[b],d[a+1]-d[b+1],d[a+2]-d[b+2]);
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const i=y*W+x, p=i*4;
+    if(d[p+3]<20) continue;
+    const l=(y*W+Math.max(0,x-radius))*4, r=(y*W+Math.min(W-1,x+radius))*4;
+    const u=(Math.max(0,y-radius)*W+x)*4, v=(Math.min(H-1,y+radius)*W+x)*4;
+    if(Math.max(delta(l,r),delta(u,v))>threshold) edge[i]=1;
+  }
+  const q=new Int32Array(N); let head=0, tail=0;
+  const seed=i=>{if(!bg[i] && (!edge[i] || d[i*4+3]<20)){bg[i]=1;q[tail++]=i;}};
+  for(let x=0;x<W;x++){seed(x);seed((H-1)*W+x);}
+  for(let y=0;y<H;y++){seed(y*W);seed(y*W+W-1);}
+  while(head<tail){const i=q[head++],x=i%W;
+    if(x) seed(i-1); if(x<W-1) seed(i+1);
+    if(i>=W) seed(i-W); if(i<N-W) seed(i+W);
+  }
+  // 梯度屏障位于轮廓两侧，向内回收半个检测窗口，减少残余光圈。
+  // 用独立标记保证每轮仅推进一个像素。
+  for(let k=0;k<radius;k++){
+    let count=0;
+    for(let i=0;i<N;i++) if(!bg[i]){const x=i%W;
+      if((x&&bg[i-1])||(x<W-1&&bg[i+1])||(i>=W&&bg[i-W])||(i<N-W&&bg[i+W])) q[count++]=i;
+    }
+    for(let j=0;j<count;j++) bg[q[j]]=1;
+  }
+  return bg;
 }
 
 function removeBg(it){
   const W = it.W, H = it.H, N = W*H;
   const src = sourceData(it), d = src.data;
   const T = P.tol, stepT = 3 + T*0.4, distT = 20 + T*2;
-  const dom = P.mode === 'color' ? hexRgb(P.bgColor) : (borderColor(d, W, H) || [255,255,255]);
+  const profile=backgroundProfile(d,W,H);
+  const preserveAlpha=P.mode==='auto' && existingTransparency(d,W,H,profile);
+  const dom = P.mode === 'color' ? hexRgb(P.bgColor) : profile.color;
   it.detected = dom;
   const dist = (o, c)=>{ const dr=d[o]-c[0], dg=d[o+1]-c[1], db=d[o+2]-c[2]; return Math.sqrt(dr*dr+dg*dg+db*db); };
-  const bg = new Uint8Array(N), q = new Int32Array(N);
+  let useGlow=P.mode==='glow';
+  let bg = useGlow ? glowBackground(d,W,H,T) : new Uint8Array(N), q = new Int32Array(N);
 
   // 1. 从四条边往里找背景。每个背景像素记着一个「参考色」，参考色每走一个像素最多变 1.5，
   //    所以很缓慢的渐变能一路走过去；而主体边缘几个像素内颜色就变很多，会被挡住（即使边缘是模糊的）。
@@ -207,6 +292,8 @@ function removeBg(it){
   const K = 1.5, seedOf = new Int32Array(N);
   const similar = (a, b)=>{               // 像素 a 已是背景，b 能不能算背景
     const ob = b*4;
+    const oa=a*4;
+    if(Math.hypot(d[ob]-d[oa],d[ob+1]-d[oa+1],d[ob+2]-d[oa+2])>24+T*.65 && d[oa+3]>=250 && d[ob+3]>=250)return false;
     if(d[ob+3] < 20){ rr[b]=rr[a]; rg[b]=rg[a]; rb[b]=rb[a]; seedOf[b]=seedOf[a]; return true; }
     const dr = d[ob]-rr[a], dg = d[ob+1]-rg[a], db = d[ob+2]-rb[a];
     if(dr*dr+dg*dg+db*db >= distT*distT) return false;
@@ -220,7 +307,8 @@ function removeBg(it){
   let qh=0, qt=0;
   const seed = i=>{ if(bg[i]) return; const o=i*4;
     if(d[o+3] < 20){ bg[i]=1; rr[i]=dom[0]; rg[i]=dom[1]; rb[i]=dom[2]; seedOf[i]=i; q[qt++]=i; }
-    else if(dist(o, dom) < distT){ bg[i]=1; rr[i]=d[o]; rg[i]=d[o+1]; rb[i]=d[o+2]; seedOf[i]=i; q[qt++]=i; } };
+    else if((P.mode==='auto' ? profile.palette.some(c=>dist(o,c)<Math.min(distT,48)) : dist(o,dom)<distT)){ bg[i]=1; rr[i]=d[o]; rg[i]=d[o+1]; rb[i]=d[o+2]; seedOf[i]=i; q[qt++]=i; } };
+  if(!useGlow && !preserveAlpha) {
   for(let x=0;x<W;x++){ seed(x); seed((H-1)*W+x); }
   for(let y=0;y<H;y++){ seed(y*W); seed(y*W+W-1); }
   const flood = (mask, cond)=>{
@@ -233,11 +321,18 @@ function removeBg(it){
     }
   };
   flood(bg, similar);
+  }
+
+  if(P.mode==='auto' && !preserveAlpha && !P.global){
+    const candidate=glowBackground(d,W,H,T);
+    if(confidentGlow(d,W,H,candidate,bg,profile)){bg=candidate;useGlow=true;}
+  }
+  it.strategy=preserveAlpha?'保留原透明度':useGlow?'闭合轮廓 · 去外光晕':'背景颜色 · 连通区域';
 
   // 2. 内部空洞 / 同色区域
-  if(P.global){
+  if(P.global && !useGlow && !preserveAlpha){
     for(let i=0;i<N;i++) if(!bg[i] && (d[i*4+3] < 20 || dist(i*4, dom) < distT)) bg[i]=1;
-  }else if(P.holes) fillHoles(d, W, H, bg, dom, distT, dist, q);
+  }else if(P.holes && !useGlow && !preserveAlpha) fillHoles(d, W, H, bg, dom, distT, dist, q);
 
   // 3. 手动修改（魔棒）
   for(const op of it.ops) wand(d, W, H, bg, op, stepT, distT, dist, q);
@@ -252,21 +347,37 @@ function removeBg(it){
 
   // 5. 输出：背景透明；靠近背景的边缘按颜色差做半透明，并扣掉混进去的背景色
   const out = new ImageData(W, H), o = out.data;
-  const lo = 10 + T*0.8, hi = lo + 170;
   let kept = 0;
   for(let y=0;y<H;y++) for(let x=0;x<W;x++){
     const i = y*W+x, p = i*4;
     if(bg[i]) continue;
     kept++;
     let a = 1, R=d[p], G=d[p+1], B=d[p+2];
-    if(P.smooth){
+    if(P.smooth && useGlow && !preserveAlpha){
+      // 只柔化一像素轮廓，不按背景色重算透明度，避免金边被去色。
+      let outside=0, total=0;
+      for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+        const xx=x+dx, yy=y+dy;
+        if(xx>=0&&xx<W&&yy>=0&&yy<H){total++;if(bg[yy*W+xx]) outside++;}
+      }
+      a=1-outside/total*0.5;
+    }
+    if(P.smooth && !useGlow && !preserveAlpha){
       let n=0, sr=0, sg=0, sb=0;
       for(let dy=-2; dy<=2; dy++){ const yy=y+dy; if(yy<0||yy>=H) continue;
         for(let dx=-2; dx<=2; dx++){ const xx=x+dx; if(xx<0||xx>=W) continue; const j=yy*W+xx;
-          if(bg[j]){ const pj=j*4; if(d[pj+3] < 20){ sr+=dom[0]; sg+=dom[1]; sb+=dom[2]; } else { sr+=d[pj]; sg+=d[pj+1]; sb+=d[pj+2]; } n++; } } }
+          if(bg[j]){ const pj=j*4; if(d[pj+3]<250)continue; sr+=d[pj]; sg+=d[pj+1]; sb+=d[pj+2]; n++; } } }
       if(n){
         const ref = [sr/n, sg/n, sb/n];
-        a = Math.min(1, Math.max(0, (dist(p, ref) - lo) / (hi - lo)));
+        // 混色方程 C=aF+(1-a)B：用 RGB 有效范围约束透明度。
+        // 低对比轮廓缺乏可靠信息时保守保留，不把白衣直接擦穿。
+        const colors=[R,G,B];let bound=0;
+        for(let k=0;k<3;k++){
+          const c=colors[k],b=ref[k];
+          bound=Math.max(bound,c>=b?(c-b)/Math.max(1,255-b):(b-c)/Math.max(1,b));
+        }
+        a=Math.max(...colors.map((c,k)=>Math.abs(c-ref[k])))<35 ? 1 : Math.max(.65,Math.min(1,bound));
+        if(d[p+3]<250)a=1;
         if(a > 0.02 && a < 1){ R=(R-ref[0]*(1-a))/a; G=(G-ref[1]*(1-a))/a; B=(B-ref[2]*(1-a))/a; }
       }
     }
@@ -318,8 +429,8 @@ function fillHoles(d, W, H, bg, dom, distT, dist, q){
   const outline = [med(sr), med(sg), med(sb)];
   const cand = new Uint8Array(N);
   for(let i=0;i<N;i++) if(!bg[i] && d[i*4+3]>=20 && dBg(i*4) < tight) cand[i]=1;
-  const seen = new Uint8Array(N), minSize = Math.max(40, Math.round(N*0.00005));
-  const maxSize = Math.round(N*0.06);                       // 再大就不是「字母里的孔」了，而是画面本身
+  const seen = new Uint8Array(N), minSize = Math.max(4, Math.round(N*0.000005));
+  const maxSize = Math.round(N*0.025);                       // 大块浅色区域保守保留，避免把牌子内部当成空洞
   for(let s=0;s<N;s++){
     if(!cand[s] || seen[s]) continue;
     let qh=0, qt=0; q[qt++]=s; seen[s]=1;
@@ -334,6 +445,14 @@ function fillHoles(d, W, H, bg, dom, distT, dist, q){
     for(let k=0;k<qt;k+=st){ const p=q[k]*4; mr+=d[p]; mg+=d[p+1]; mb+=d[p+2]; mn++; }
     const er=mr/mn-bgMean[0], eg=mg/mn-bgMean[1], eb=mb/mn-bgMean[2];
     if(Math.sqrt(er*er+eg*eg+eb*eb) > Math.max(8, p95 + 4)) continue;
+    let boundary=0,strong=0;
+    for(let k=0;k<qt;k+=st){const i=q[k],x=i%W;
+      for(const j of [x?i-1:-1,x<W-1?i+1:-1,i>=W?i-W:-1,i<N-W?i+W:-1]){
+        if(j<0||cand[j]||bg[j])continue;boundary++;
+        if(dBg(j*4)>Math.max(45,tight*2))strong++;
+      }
+    }
+    if(!boundary||strong/boundary<.85)continue;
     // 这块区域外面一圈的平均颜色
     let n=0, r=0, g=0, b=0;
     for(let k=0;k<qt;k+=st){ const i=q[k], x=i%W;
@@ -436,7 +555,7 @@ function drawPreview(){
   const x = pv.getContext('2d'); x.clearRect(0,0,pv.width,pv.height); x.drawImage(src,0,0);
   $('pvInfo').textContent = `${cur.name} · ${pv.width} × ${pv.height} px${showOrig?' · 原图':''} · 去掉了 ${Math.round(cur.ratio*100)}% 的像素${cur.ops.length?` · 手动修改 ${cur.ops.length} 处`:''}`;
   const c = cur.detected;
-  $('detected').innerHTML = c ? `<span class="swatch" style="background:${rgbHex(c)}"></span>${P.mode==='auto'?'识别到的背景色':'指定的背景色'} ${rgbHex(c).toUpperCase()}` : '—';
+  $('detected').innerHTML = c ? `<span class="swatch" style="background:${rgbHex(c)}"></span>${cur.strategy||'背景色'} ${rgbHex(c).toUpperCase()}` : '—';
 }
 function updateTools(){
   $('undo').disabled = !cur || !cur.ops.length; $('resetOps').disabled = !cur || !cur.ops.length;
@@ -480,7 +599,7 @@ function syncSeg(id, v){ $(id).querySelectorAll('button').forEach(b=>b.classList
 function syncControls(){
   syncSeg('modeSeg', P.mode); $('bgColor').classList.toggle('hidden', P.mode!=='color'); $('bgColor').value = P.bgColor;
   $('tol').value = P.tol; $('tolV').textContent = P.tol;
-  $('holes').checked = P.holes; $('global').checked = P.global; $('holes').disabled = P.global;
+  $('holes').checked = P.holes; $('global').checked = P.global; $('holes').disabled = P.global || P.mode==='glow'; $('global').disabled = P.mode==='glow';
   $('smooth').checked = P.smooth; syncSeg('shrinkSeg', P.shrink); syncSeg('fmtSeg', P.fmt); $('trim').checked = P.trim;
   syncSeg('toolSeg', tool);
   $('resetP').disabled = Object.keys(DEFAULTS).every(k=>P[k]===DEFAULTS[k]);
